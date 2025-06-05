@@ -429,7 +429,7 @@ export class EconomyDebugPanel {
 
   triggerMarketEvent(eventType) {
     const stations = this.game.entities.stations;
-    const commodities = this.game.COMMODITIES;
+    const commodities = this.game.COMMODITIES || [];
     
     switch (eventType) {
       case 'shortage':

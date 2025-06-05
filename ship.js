@@ -5,9 +5,12 @@ export class PlayerShip {
     this.mesh = this.createMesh();
     this.velocity = new THREE.Vector2(0, 0);
     this.rotation = Math.PI / 2; // Start facing "up" (positive Y)
-    this.maxSpeed = 60; // Increased from 25
-    this.acceleration = 100; // Increased from 40
-    this.drag = 0.97; // Decreased drag effect (closer to 1 means less drag)
+    this.maxSpeed = 80; // Maximum speed the ship can achieve
+    this.acceleration = 120; // How quickly ship accelerates
+    this.deceleration = 80; // How quickly ship decelerates when throttle is reduced
+    this.drag = 0.98; // Natural drag when no input
+    this.throttle = 0; // Current throttle level (0 to 1)
+    this.throttleStep = 2.5; // How fast throttle changes per second
     this.engineParticles = [];
     this.setupEngineParticles();
   }
@@ -62,42 +65,61 @@ export class PlayerShip {
   }
 
   update(deltaTime, keys, gameState) {
-    const thrust = new THREE.Vector2(0, 0);
-    let isThrusting = false;
-    
-    // Movement input
+    // Throttle control: W increases throttle, S decreases throttle
     if (keys['KeyW'] || keys['ArrowUp']) {
-      thrust.x += Math.cos(this.rotation);
-      thrust.y += Math.sin(this.rotation);
-      isThrusting = true;
+      this.throttle = Math.min(1.0, this.throttle + this.throttleStep * deltaTime);
+    } else if (keys['KeyS'] || keys['ArrowDown']) {
+      this.throttle = Math.max(-0.5, this.throttle - this.throttleStep * deltaTime); // Allow reverse at half power
+    } else {
+      // Gradually reduce throttle when no input (coast to idle)
+      if (this.throttle > 0) {
+        this.throttle = Math.max(0, this.throttle - this.throttleStep * 0.5 * deltaTime);
+      } else if (this.throttle < 0) {
+        this.throttle = Math.min(0, this.throttle + this.throttleStep * 0.5 * deltaTime);
+      }
     }
-    if (keys['KeyS'] || keys['ArrowDown']) {
-      thrust.x -= Math.cos(this.rotation) * 0.5;
-      thrust.y -= Math.sin(this.rotation) * 0.5;
-    }
-    // Removed A/D key rotation, ship now aims at mouse
     
-    // Aim at mouse cursor
+    // Aim at mouse cursor for steering
     if (gameState.mouseWorldPosition) {
-        const dx = gameState.mouseWorldPosition.x - this.mesh.position.x;
-        const dy = gameState.mouseWorldPosition.y - this.mesh.position.y;
-        this.rotation = Math.atan2(dy, dx);
+      const dx = gameState.mouseWorldPosition.x - this.mesh.position.x;
+      const dy = gameState.mouseWorldPosition.y - this.mesh.position.y;
+      this.rotation = Math.atan2(dy, dx);
     }
     
     // Apply engine upgrades
     const engineMultiplier = 1 + (gameState.engineLevel - 1) * 0.3;
     const maxSpeed = this.maxSpeed * engineMultiplier;
     const acceleration = this.acceleration * engineMultiplier;
+    const deceleration = this.deceleration * engineMultiplier;
     
-    // Apply acceleration
-    if (thrust.length() > 0) {
-      thrust.normalize();
-      this.velocity.x += thrust.x * acceleration * deltaTime;
-      this.velocity.y += thrust.y * acceleration * deltaTime;
+    // Calculate desired velocity based on throttle and facing direction
+    const desiredSpeed = maxSpeed * this.throttle;
+    const desiredVelocity = new THREE.Vector2(
+      Math.cos(this.rotation) * desiredSpeed,
+      Math.sin(this.rotation) * desiredSpeed
+    );
+    
+    // Smoothly adjust current velocity toward desired velocity
+    const velocityDiff = new THREE.Vector2().subVectors(desiredVelocity, this.velocity);
+    const adjustmentRate = this.throttle > 0 ? acceleration : deceleration;
+    
+    // Apply acceleration/deceleration
+    if (velocityDiff.length() > 0) {
+      const maxAdjustment = adjustmentRate * deltaTime;
+      if (velocityDiff.length() <= maxAdjustment) {
+        this.velocity.copy(desiredVelocity);
+      } else {
+        velocityDiff.normalize().multiplyScalar(maxAdjustment);
+        this.velocity.add(velocityDiff);
+      }
     }
     
-    // Apply drag and speed limit
-    this.velocity.multiplyScalar(this.drag);
+    // Apply natural drag when coasting
+    if (Math.abs(this.throttle) < 0.01) {
+      this.velocity.multiplyScalar(this.drag);
+    }
+    
+    // Enforce maximum speed limit
     if (this.velocity.length() > maxSpeed) {
       this.velocity.normalize().multiplyScalar(maxSpeed);
     }
@@ -106,10 +128,11 @@ export class PlayerShip {
     this.mesh.position.x += this.velocity.x * deltaTime;
     this.mesh.position.y += this.velocity.y * deltaTime;
     
-    // Update rotation
-    this.mesh.rotation.z = this.rotation; // Align visual rotation with physics rotation
+    // Update visual rotation to match movement direction
+    this.mesh.rotation.z = this.rotation;
     
-    // Update engine particles
+    // Update engine particles based on throttle
+    const isThrusting = Math.abs(this.throttle) > 0.05;
     this.updateEngineParticles(deltaTime, isThrusting, gameState.engineLevel);
   }
 

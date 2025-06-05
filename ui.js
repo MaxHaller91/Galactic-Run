@@ -79,6 +79,23 @@ export class UIManager {
       }
     }
     
+    // Update throttle display
+    if (this.game.playerShip) {
+      const throttlePercent = Math.round(Math.abs(this.game.playerShip.throttle) * 100);
+      document.getElementById('throttlePercent').textContent = throttlePercent;
+      const throttleFill = document.getElementById('throttleFill');
+      if (throttleFill) {
+        throttleFill.style.width = `${throttlePercent}%`;
+        
+        // Change color based on throttle direction
+        if (this.game.playerShip.throttle < 0) {
+          throttleFill.style.background = '#ff8800'; // Orange for reverse
+        } else {
+          throttleFill.style.background = '#00ff88'; // Green for forward
+        }
+      }
+    }
+    
     // Cargo list in the main HUD is removed. Detailed list will be in shipInfoPanel.
     
     // Update upgrade button states
