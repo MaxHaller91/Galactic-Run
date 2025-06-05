@@ -9,6 +9,7 @@ import { COMMODITIES_LIST } from 'constants'; // Import from constants.js
 import { MiningLaser } from 'miningLaser'; // Import the new MiningLaser class
 import { Minimap } from 'minimap'; // Import the Minimap class
 import { WeaponSystem, WEAPON_TYPES } from 'weapons'; // Import the new weapon system
+import { EconomyDebugPanel } from 'economyDebug'; // Import the economy debug panel
 export class SpaceCargoGame {
   constructor() {
     this.scene = new THREE.Scene();
@@ -77,6 +78,7 @@ export class SpaceCargoGame {
     this.ui = new UIManager(this.gameState, this.zones, this); 
     this.miningLaser = new MiningLaser(this.scene);
     this.weaponSystem = new WeaponSystem(this); // Initialize weapon system
+    this.economyDebug = new EconomyDebugPanel(this); // Initialize economy debug panel
     // Player ship is created in loadZone, ensure it exists before minimap init uses it
     // For now, minimap constructor handles if playerShip is null initially.
     // A safer approach would be to initialize minimap after playerShip is guaranteed.
@@ -683,6 +685,11 @@ export class SpaceCargoGame {
     // Update weapon system
     if (this.weaponSystem) {
       this.weaponSystem.update(deltaTime);
+    }
+    
+    // Update economy debug panel
+    if (this.economyDebug) {
+      this.economyDebug.update(deltaTime);
     }
     if (this.miningLaser && this.miningLaser.isActive) {
       // If player or asteroid moves, laser needs to be updated
