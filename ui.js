@@ -179,7 +179,8 @@ export class UIManager {
       tradePanelHeader.innerHTML = `${station.name}<br>
         <span style="font-size: 0.8em; color: #77aaff;">Produces: ${station.productionFocus} | Consumes: ${station.consumptionFocus}</span><br>
         <span style="font-size: 0.7em; color: ${healthColor};">Population: ${populationText} | Health: ${station.stationHealth.toUpperCase()}</span><br>
-        <span style="font-size: 0.7em; color: #aaaaaa;">Food: ${Math.floor(station.foodStock)} | Water: ${Math.floor(station.waterStock)} | Happiness: ${Math.floor(station.happiness)}%</span>`;
+        <span style="font-size: 0.7em; color: #aaaaaa;">Food: ${Math.floor(station.foodStock)} | Water: ${Math.floor(station.waterStock)} | Happiness: ${Math.floor(station.happiness)}%</span><br>
+        <span style="font-size: 0.6em; color: #888888;">Daily Consumption: Food ${(station.population * 0.1).toFixed(1)}/day | Water ${(station.population * 0.05).toFixed(1)}/day</span>`;
     }
     tradeList.innerHTML = ''; // Clear previous list items, but not the header we just set
     // Determine faction standing modifier

@@ -243,6 +243,9 @@ export class SpaceStation {
     // 5. Check for faction changes or pirate takeovers
     this.checkStationControl(game);
     
+    // 6. Happiness-based pirate spawning
+    this.checkPirateSpawning(game);
+    
     this.lastUpdateTime = currentTime;
   }
 
@@ -334,6 +337,54 @@ export class SpaceStation {
           game.ui.showMessage(`${this.name} has been taken over by ${opposingFaction}!`, 'warning');
         }
       }
+    }
+  }
+
+  checkPirateSpawning(game) {
+    // Happiness-based pirate spawning - lower happiness = higher chance of pirates
+    let spawnChance = 0;
+    
+    if (this.happiness < 30) {
+      spawnChance = 0.02; // 2% chance per update when unhappy
+    } else if (this.happiness < 50) {
+      spawnChance = 0.005; // 0.5% chance when struggling
+    }
+    
+    // Additional chance if station is in crisis or abandoned
+    if (this.stationHealth === 'crisis') {
+      spawnChance += 0.01; // Extra 1% chance
+    } else if (this.stationHealth === 'abandoned') {
+      spawnChance += 0.02; // Extra 2% chance
+    }
+    
+    // Don't spawn too many pirates in one area
+    const nearbyPirates = game.entities.pirates.filter(pirate => {
+      const distance = pirate.mesh.position.distanceTo(this.mesh.position);
+      return distance < 100; // Within 100 units of station
+    });
+    
+    if (nearbyPirates.length >= 5) {
+      spawnChance = 0; // Cap at 5 pirates per station area
+    }
+    
+    if (Math.random() < spawnChance) {
+      this.spawnSinglePirate(game);
+    }
+  }
+
+  spawnSinglePirate(game) {
+    // Spawn a single pirate near this station
+    const angle = Math.random() * Math.PI * 2;
+    const distance = 50 + Math.random() * 50; // Spawn further out than takeover pirates
+    const x = this.mesh.position.x + Math.cos(angle) * distance;
+    const y = this.mesh.position.y + Math.sin(angle) * distance;
+    
+    const pirate = new Pirate(x, y);
+    game.entities.pirates.push(pirate);
+    game.scene.add(pirate.mesh);
+    
+    if (game && game.ui) {
+      game.ui.showMessage(`Pirates spotted near ${this.name}!`, 'warning');
     }
   }
 

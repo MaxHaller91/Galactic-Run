@@ -68,6 +68,7 @@ export class SpaceCargoGame {
     this.miningLaser = null; 
     this.minimap = null; // Initialize minimap reference
     this.weaponSystem = null; // Initialize weapon system reference
+    this.timeScale = 1.0; // Add time scale property
     
     this.keys = {};
     this.mouseScreenPosition = new THREE.Vector2();
@@ -582,6 +583,9 @@ export class SpaceCargoGame {
   update(deltaTime) {
     if (this.gameState.isPaused) return;
     
+    // Apply time scale to delta time
+    const scaledDeltaTime = deltaTime * this.timeScale;
+    
     // Convert mouse screen coordinates to world coordinates for ship aiming
     const vec = new THREE.Vector3();
     const pos = new THREE.Vector3();
@@ -596,7 +600,7 @@ export class SpaceCargoGame {
     this.gameState.mouseWorldPosition.set(pos.x, pos.y);
     // Update player ship
     if (this.playerShip) {
-      this.playerShip.update(deltaTime, this.keys, this.gameState, this);
+      this.playerShip.update(scaledDeltaTime, this.keys, this.gameState, this);
     }
     
     // Update camera to follow player
@@ -607,17 +611,17 @@ export class SpaceCargoGame {
     
     // Update pirates
     this.entities.pirates.forEach(pirate => {
-      pirate.update(deltaTime, this.playerShip.mesh.position, this); // Pass 'this' (the game instance)
+      pirate.update(scaledDeltaTime, this.playerShip.mesh.position, this); // Pass 'this' (the game instance)
     });
     
     // Update projectiles
     this.entities.projectiles = this.entities.projectiles.filter(projectile => {
       // Update projectile with game reference for enhanced features
       if (projectile.update) {
-        projectile.update(deltaTime, this);
+        projectile.update(scaledDeltaTime, this);
       } else {
         // Fallback for old projectiles
-        projectile.update(deltaTime);
+        projectile.update(scaledDeltaTime);
       }
       
       if (projectile.life <= 0) {
@@ -678,11 +682,11 @@ export class SpaceCargoGame {
       return true;
     });
     // Update asteroids
-    this.entities.asteroids.forEach(asteroid => asteroid.update(deltaTime));
+    this.entities.asteroids.forEach(asteroid => asteroid.update(scaledDeltaTime));
     // Update Jump Gates (for animations, etc.)
-    this.entities.jumpGates.forEach(gate => gate.update(deltaTime));
+    this.entities.jumpGates.forEach(gate => gate.update(scaledDeltaTime));
     // Update friendly ships
-    this.entities.friendlyShips.forEach(ship => ship.update(deltaTime));
+    this.entities.friendlyShips.forEach(ship => ship.update(scaledDeltaTime));
     
     // Update station economies (every 30 seconds)
     const currentTime = Date.now();
