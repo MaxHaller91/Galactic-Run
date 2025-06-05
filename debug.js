@@ -239,6 +239,35 @@ export class DebugSystem {
 
     document.head.appendChild(style);
     document.body.appendChild(debugPanel);
+    
+    // Add a visible debug button for easier access
+    this.createDebugButton();
+  }
+
+  createDebugButton() {
+    const debugButton = document.createElement('button');
+    debugButton.id = 'debugToggleButton';
+    debugButton.textContent = 'DEBUG';
+    debugButton.style.cssText = `
+      position: fixed;
+      top: 10px;
+      right: 10px;
+      background: rgba(255, 102, 0, 0.8);
+      border: 1px solid #ff6600;
+      color: #ffcc00;
+      padding: 5px 10px;
+      font-family: 'Lucida Console', monospace;
+      font-size: 11px;
+      cursor: pointer;
+      z-index: 2999;
+      border-radius: 3px;
+    `;
+    
+    debugButton.addEventListener('click', () => {
+      this.toggle();
+    });
+    
+    document.body.appendChild(debugButton);
   }
 
   setupEventListeners() {
