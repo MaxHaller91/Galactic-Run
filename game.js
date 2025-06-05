@@ -594,7 +594,7 @@ export class SpaceCargoGame {
     this.gameState.mouseWorldPosition.set(pos.x, pos.y);
     // Update player ship
     if (this.playerShip) {
-      this.playerShip.update(deltaTime, this.keys, this.gameState);
+      this.playerShip.update(deltaTime, this.keys, this.gameState, this);
     }
     
     // Update camera to follow player

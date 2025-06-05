@@ -11,6 +11,9 @@ export class PlayerShip {
     this.drag = 0.98; // Natural drag when no input
     this.throttle = 0; // Current throttle level (0 to 1)
     this.throttleStep = 2.5; // How fast throttle changes per second
+    this.boostActive = false; // Speed boost state
+    this.boostMultiplier = 1.8; // Speed boost multiplier
+    this.boostEnergyCost = 25; // Energy cost per second for boost
     this.engineParticles = [];
     this.setupEngineParticles();
   }
@@ -64,18 +67,30 @@ export class PlayerShip {
     }
   }
 
-  update(deltaTime, keys, gameState) {
+  update(deltaTime, keys, gameState, game = null) {
     // Throttle control: W increases throttle, S decreases throttle
+    // Throttle maintains its level when no input is given
     if (keys['KeyW'] || keys['ArrowUp']) {
       this.throttle = Math.min(1.0, this.throttle + this.throttleStep * deltaTime);
     } else if (keys['KeyS'] || keys['ArrowDown']) {
       this.throttle = Math.max(-0.5, this.throttle - this.throttleStep * deltaTime); // Allow reverse at half power
-    } else {
-      // Gradually reduce throttle when no input (coast to idle)
-      if (this.throttle > 0) {
-        this.throttle = Math.max(0, this.throttle - this.throttleStep * 0.5 * deltaTime);
-      } else if (this.throttle < 0) {
-        this.throttle = Math.min(0, this.throttle + this.throttleStep * 0.5 * deltaTime);
+    }
+    
+    // Quick throttle controls
+    if (keys['KeyZ']) {
+      this.throttle = 1.0; // Full throttle
+    } else if (keys['KeyX']) {
+      this.throttle = 0.0; // Zero throttle
+    }
+    
+    // Speed boost control (Spacebar)
+    this.boostActive = false;
+    if (keys['Space'] && game && game.weaponSystem) {
+      // Check if we have enough energy for boost
+      if (game.weaponSystem.energy >= this.boostEnergyCost * deltaTime) {
+        this.boostActive = true;
+        // Consume energy for boost
+        game.weaponSystem.energy -= this.boostEnergyCost * deltaTime;
       }
     }
     
@@ -88,9 +103,14 @@ export class PlayerShip {
     
     // Apply engine upgrades
     const engineMultiplier = 1 + (gameState.engineLevel - 1) * 0.3;
-    const maxSpeed = this.maxSpeed * engineMultiplier;
+    let maxSpeed = this.maxSpeed * engineMultiplier;
     const acceleration = this.acceleration * engineMultiplier;
     const deceleration = this.deceleration * engineMultiplier;
+    
+    // Apply speed boost if active
+    if (this.boostActive) {
+      maxSpeed *= this.boostMultiplier;
+    }
     
     // Calculate desired velocity based on throttle and facing direction
     const desiredSpeed = maxSpeed * this.throttle;
