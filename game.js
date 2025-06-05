@@ -3,7 +3,7 @@ import { CSS2DRenderer, CSS2DObject } from 'three/renderers/CSS2DRenderer.js';
 // Removed duplicate imports
 import { PlayerShip } from 'ship';
 import { UIManager } from 'ui';
-import { SpaceStation, Pirate, Projectile, Asteroid, JumpGate, Police } from 'entities';
+import { SpaceStation, Pirate, Projectile, Asteroid, JumpGate, Police, MiningShip, PirateStation, EnhancedPirate } from 'entities';
 import { FriendlyShip } from 'friendlyShip'; // Use import map alias
 import { COMMODITIES_LIST } from 'constants'; // Import from constants.js
 import { MiningLaser } from 'miningLaser'; // Import the new MiningLaser class
@@ -64,7 +64,8 @@ export class SpaceCargoGame {
       asteroids: [],
       jumpGates: [],
       friendlyShips: [], // Add friendlyShips array
-      police: [] // Add police array
+      police: [], // Add police array
+      pirateStations: [] // Add pirate stations array
     };
     this.miningLaser = null; 
     this.minimap = null; // Initialize minimap reference
@@ -157,6 +158,9 @@ export class SpaceCargoGame {
       this.entities.derelicts.forEach(d => this.scene.remove(d.mesh));
       this.entities.derelicts = [];
     }
+    // Remove pirate stations
+    this.entities.pirateStations.forEach(ps => this.scene.remove(ps.mesh));
+    this.entities.pirateStations = [];
     // Projectiles are short-lived and managed separately, but good to clear any stragglers
     this.entities.projectiles.forEach(p => this.scene.remove(p.mesh));
     this.entities.stations = [];
@@ -168,6 +172,10 @@ export class SpaceCargoGame {
     this.entities.friendlyShips = [];                                     // Clear array
     this.entities.police.forEach(p => this.scene.remove(p.mesh)); // Remove police
     this.entities.police = [];                                     // Clear array
+    if (this.entities.miningShips) {
+      this.entities.miningShips.forEach(ms => this.scene.remove(ms.mesh)); // Remove mining ships
+      this.entities.miningShips = [];                                      // Clear array
+    }
     if (this.ui) { // Check if UI is initialized
       this.ui.clearAllIndicators(); // Use new UI method
     }
@@ -221,6 +229,11 @@ export class SpaceCargoGame {
             this.spawnAsteroids(12); // More asteroids for larger space
             this.spawnDerelicts(3); // Add derelict ships to discover
             
+            // Add pirate station in Alpha Sector (low threat)
+            const pirateStation1 = new PirateStation(-700, -300, CSS2DObject);
+            this.entities.pirateStations.push(pirateStation1);
+            this.scene.add(pirateStation1.mesh);
+            
             // Jump gate positioned at zone edge
             const gateToOuterWilds = new JumpGate(800, 0, 'outer-wilds', this.zones['outer-wilds'].name, CSS2DObject);
             this.entities.jumpGates.push(gateToOuterWilds);
@@ -241,6 +254,14 @@ export class SpaceCargoGame {
             this.spawnPirates(zoneConfig.pirateActivity === 'high' ? 8 : 4);
             this.spawnAsteroids(25); // Rich in resources
             this.spawnDerelicts(5); // More derelicts in dangerous space
+            
+            // Add multiple pirate stations in Outer Wilds (high threat)
+            const pirateStation2 = new PirateStation(400, -500, CSS2DObject);
+            const pirateStation3 = new PirateStation(-300, 600, CSS2DObject);
+            this.entities.pirateStations.push(pirateStation2);
+            this.entities.pirateStations.push(pirateStation3);
+            this.scene.add(pirateStation2.mesh);
+            this.scene.add(pirateStation3.mesh);
             
             // Jump gate back to alpha sector
             const gateToAlphaSector = new JumpGate(-800, 0, 'alpha-sector', this.zones['alpha-sector'].name, CSS2DObject);
@@ -265,7 +286,9 @@ export class SpaceCargoGame {
       const x = this.playerShip.mesh.position.x + Math.cos(angle) * distance;
       const y = this.playerShip.mesh.position.y + Math.sin(angle) * distance;
       
-      const pirate = new Pirate(x, y);
+      // Use EnhancedPirate instead of old Pirate class
+      const threatLevel = Math.floor(Math.random() * 3) + 1; // Random threat level 1-3
+      const pirate = new EnhancedPirate(x, y, threatLevel);
       this.entities.pirates.push(pirate);
       this.scene.add(pirate.mesh);
     }
@@ -291,10 +314,10 @@ export class SpaceCargoGame {
   }
 
   spawnPolice(zoneId, factionControl) {
-    // Spawn police based on zone characteristics
-    const policeCount = zoneId === 'alpha-sector' ? 2 : 1; // More police in safer zones
+    // Enhanced police spawning - always spawn in pairs for better coordination
+    const squadCount = zoneId === 'alpha-sector' ? 2 : 1; // Number of squads (pairs)
     
-    for (let i = 0; i < policeCount; i++) {
+    for (let squad = 0; squad < squadCount; squad++) {
       // Spawn police near a random station
       let spawnX, spawnY;
       if (this.entities.stations.length > 0) {
@@ -306,9 +329,58 @@ export class SpaceCargoGame {
         spawnY = (Math.random() - 0.5) * 200;
       }
       
-      const police = new Police(spawnX, spawnY, this.entities.stations, factionControl);
-      this.entities.police.push(police);
-      this.scene.add(police.mesh);
+      // Create police squad (2 ships)
+      const police1 = new Police(spawnX, spawnY, this.entities.stations, factionControl);
+      const police2 = new Police(spawnX + 20, spawnY + 10, this.entities.stations, factionControl, police1);
+      
+      // Link them as squad mates
+      police1.squadMate = police2;
+      police2.squadMate = police1;
+      
+      this.entities.police.push(police1);
+      this.entities.police.push(police2);
+      this.scene.add(police1.mesh);
+      this.scene.add(police2.mesh);
+      
+      if (this.ui) {
+        this.ui.showMessage(`Police squad deployed in ${zoneId}`, 'system-neutral');
+      }
+    }
+  }
+
+  spawnConstructedShip(station, shipType) {
+    // Spawn a ship near the station that built it
+    const angle = Math.random() * Math.PI * 2;
+    const distance = 15 + Math.random() * 10;
+    const x = station.mesh.position.x + Math.cos(angle) * distance;
+    const y = station.mesh.position.y + Math.sin(angle) * distance;
+    
+    let newShip;
+    
+    switch(shipType) {
+      case 'police':
+        newShip = new Police(x, y, this.entities.stations, station.controllingFaction);
+        this.entities.police.push(newShip);
+        break;
+      case 'miner':
+        // We'll create MiningShip class in Phase 2
+        newShip = new MiningShip(x, y, this.entities.asteroids, station);
+        if (!this.entities.miningShips) this.entities.miningShips = [];
+        this.entities.miningShips.push(newShip);
+        break;
+      case 'trader':
+        newShip = new FriendlyShip(x, y, this.entities.stations, this);
+        this.entities.friendlyShips.push(newShip);
+        break;
+    }
+    
+    if (newShip) {
+      this.scene.add(newShip.mesh);
+      station.ownedShips.push(newShip);
+      
+      if (this.ui) {
+        this.ui.showMessage(`${station.name} deployed new ${shipType}!`, 'system-neutral');
+      }
     }
   }
   spawnAsteroids(count) {
@@ -757,10 +829,45 @@ export class SpaceCargoGame {
     // Update police
     this.entities.police.forEach(police => police.update(scaledDeltaTime, this));
     
+    // Update mining ships
+    if (this.entities.miningShips) {
+      this.entities.miningShips.forEach(miner => miner.update(scaledDeltaTime));
+    }
+    
+    // Update pirate stations
+    this.entities.pirateStations.forEach(pirateStation => {
+      pirateStation.update(scaledDeltaTime, this);
+    });
+    
     // Update station economies (every 30 seconds)
     const currentTime = Date.now();
     this.entities.stations.forEach(station => {
       station.updateEconomy(currentTime, this);
+      
+      // Update station tier based on population
+      station.updateTier();
+      
+      // Update governor AI
+      if (station.governor) {
+        station.governor.update(scaledDeltaTime, this);
+      }
+      
+      // Station defense systems
+      station.defendAgainstPirates(this, scaledDeltaTime);
+      
+      // Process construction queue
+      if (station.constructionQueue.length > 0) {
+        for (let i = station.constructionQueue.length - 1; i >= 0; i--) {
+          const construction = station.constructionQueue[i];
+          construction.timeRemaining -= scaledDeltaTime;
+          
+          if (construction.timeRemaining <= 0) {
+            // Construction complete - spawn the ship
+            this.spawnConstructedShip(station, construction.type);
+            station.constructionQueue.splice(i, 1);
+          }
+        }
+      }
     });
     
     // Update weapon system

@@ -176,11 +176,19 @@ export class UIManager {
                          station.stationHealth === 'crisis' ? '#F44336' : '#666666';
       const populationText = Math.floor(station.population).toLocaleString();
       
+      // Calculate station wealth and get governor status
+      const stationWealth = station.calculateWealth ? station.calculateWealth() : station.credits;
+      const governorStatus = this.getGovernorStatus(station);
+      const cargoInfo = this.getStationCargoInfo(station);
+      
       tradePanelHeader.innerHTML = `${station.name}<br>
-        <span style="font-size: 0.8em; color: #77aaff;">Produces: ${station.productionFocus} | Consumes: ${station.consumptionFocus}</span><br>
+        <span style="font-size: 0.8em; color: #77aaff;">${station.stationType.toUpperCase()} STATION | Tier ${station.tier}</span><br>
+        <span style="font-size: 0.7em; color: #ffaa00;">Credits: ${station.credits.toLocaleString()} | Wealth: ${stationWealth.toLocaleString()}</span><br>
         <span style="font-size: 0.7em; color: ${healthColor};">Population: ${populationText} | Health: ${station.stationHealth.toUpperCase()}</span><br>
         <span style="font-size: 0.7em; color: #aaaaaa;">Food: ${Math.floor(station.foodStock)} | Water: ${Math.floor(station.waterStock)} | Happiness: ${Math.floor(station.happiness)}%</span><br>
-        <span style="font-size: 0.6em; color: #888888;">Daily Consumption: Food ${(station.population * 0.1).toFixed(1)}/day | Water ${(station.population * 0.05).toFixed(1)}/day</span>`;
+        <span style="font-size: 0.6em; color: #888888;">Produces: ${station.productionFocus} | Consumes: ${station.consumptionFocus}</span><br>
+        <span style="font-size: 0.6em; color: #cccccc;">Governor: ${governorStatus}</span><br>
+        <span style="font-size: 0.6em; color: #aaccff;">Cargo: ${cargoInfo}</span>`;
     }
     tradeList.innerHTML = ''; // Clear previous list items, but not the header we just set
     // Determine faction standing modifier
@@ -194,17 +202,18 @@ export class UIManager {
       priceModifier = 1.1; // 10% markup on buys, 10% penalty on sells
       standingText = ` <span style="color: #F44336;">(Unfriendly Markup)</span>`;
     }
-    // Add buy options
+    // Add buy options - only show items the station actually has in stock
     station.goods.forEach(marketGood => {
-      // Player Buys from Station
-      if (this.gameState.cargo.length < this.gameState.maxCargo) {
+      // Check if station actually has this item in inventory
+      const stationStock = station.inventory[marketGood.name] || 0;
+      if (stationStock > 0 && this.gameState.cargo.length < this.gameState.maxCargo) {
         const buyBtn = document.createElement('button');
         buyBtn.className = 'upgrade-btn';
         
         // Player buys at station's sell price, adjusted by faction standing
         const actualSellPrice = Math.floor(marketGood.stationBaseSellPrice * (standing > 10 ? 0.9 : (standing < -10 ? 1.1 : 1.0)));
         
-        let buyText = `Buy ${marketGood.name} ($${actualSellPrice})`;
+        let buyText = `Buy ${marketGood.name} ($${actualSellPrice}) [${stationStock}]`;
         if (marketGood.name === station.productionFocus) {
           buyText += ` <span style="color: #4CAF50;">(Surplus)</span>`;
           buyBtn.style.borderColor = '#4CAF50';
@@ -412,5 +421,78 @@ export class UIManager {
       indicator.style.top = `${y}px`;
       indicator.style.setProperty('--indicator-rotation', `${angleRad + Math.PI / 2}rad`);
     }
+  }
+
+  // Helper method to get governor AI status
+  getGovernorStatus(station) {
+    if (!station.governor) return 'No Governor';
+    
+    const governor = station.governor;
+    let status = '';
+    
+    // Check construction queue
+    if (station.constructionQueue && station.constructionQueue.length > 0) {
+      const construction = station.constructionQueue[0];
+      const timeLeft = Math.ceil(construction.timeRemaining);
+      status += `Building ${construction.type} (${timeLeft}s)`;
+    } else if (governor.priorities && governor.priorities.length > 0) {
+      const topPriority = governor.priorities[0];
+      switch(topPriority.type) {
+        case 'EMERGENCY_FOOD':
+          status += 'CRISIS: Need Food!';
+          break;
+        case 'EMERGENCY_WATER':
+          status += 'CRISIS: Need Water!';
+          break;
+        case 'BUILD_POLICE':
+          status += 'Planning: Security Forces';
+          break;
+        case 'BUILD_MINER':
+          status += 'Planning: Mining Operations';
+          break;
+        case 'BUILD_TRADER':
+          status += 'Planning: Trade Routes';
+          break;
+        case 'UPGRADE_DEFENSE':
+          status += 'Planning: Defense Upgrade';
+          break;
+        default:
+          status += 'Evaluating Options';
+      }
+    } else {
+      status += 'Monitoring Station';
+    }
+    
+    // Add recent pirate attacks info
+    if (governor.recentPirateAttacks > 0) {
+      status += ` | Pirates: ${governor.recentPirateAttacks}`;
+    }
+    
+    return status;
+  }
+
+  // Helper method to get station cargo information
+  getStationCargoInfo(station) {
+    if (!station.inventory) return 'Legacy System';
+    
+    // Use inventory system (which is what the trade system actually uses)
+    const inventory = station.inventory || {};
+    const totalCargo = Object.values(inventory).reduce((sum, qty) => sum + qty, 0);
+    const cargoPercent = Math.round((totalCargo / station.maxCargo) * 100);
+    
+    let info = `${totalCargo}/${station.maxCargo} (${cargoPercent}%)`;
+    
+    // Show top 5 cargo items with quantities
+    const sortedCargo = Object.entries(inventory)
+      .filter(([name, qty]) => qty > 0)
+      .sort((a, b) => b[1] - a[1])
+      .slice(0, 5);
+    
+    if (sortedCargo.length > 0) {
+      const topItems = sortedCargo.map(([name, qty]) => `${name}: ${qty}`).join(' | ');
+      info = `${totalCargo}/${station.maxCargo} (${cargoPercent}%) - ${topItems}`;
+    }
+    
+    return info;
   }
 }

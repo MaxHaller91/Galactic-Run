@@ -28,7 +28,8 @@ export class Minimap {
             asteroid: '#808080',     // Grey (for future use)
             jumpGate: '#FF00FF',     // Magenta
             friendlyShip: '#FFFF00', // Yellow
-            police: '#0088FF'        // Blue
+            police: '#0088FF',       // Blue
+            miningShip: '#FF8800'    // Orange
         };
         this.dotSizes = { // Radius in pixels
             player: 3,
@@ -37,7 +38,8 @@ export class Minimap {
             asteroid: 1,
             jumpGate: 4,
             friendlyShip: 2,
-            police: 2
+            police: 2,
+            miningShip: 2
         };
         this.filters = {
             asteroids: true, // Default to true as checkbox is checked initially
@@ -101,6 +103,12 @@ export class Minimap {
         if (this.entities.police) {
             this.entities.police.forEach(police => {
                 this.drawEntityDot(police, this.dotColors.police, this.dotSizes.police);
+            });
+        }
+        // Draw mining ships (always draw these for now, or add a filter)
+        if (this.entities.miningShips) {
+            this.entities.miningShips.forEach(miner => {
+                this.drawEntityDot(miner, this.dotColors.miningShip, this.dotSizes.miningShip);
             });
         }
         // Draw asteroids (conditionally)
