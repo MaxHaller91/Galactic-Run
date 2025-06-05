@@ -1,0 +1,373 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Space Cargo Commander</title>
+    <script type="importmap">
+      {
+        "imports": {
+          "three": "https://esm.sh/three@0.160.0?dev",
+          "three/": "https://esm.sh/three@0.160.0/examples/jsm/",
+          "main": "./main.js",
+          "game": "./game.js",
+          "ship": "./ship.js",
+          "ui": "./ui.js",
+          "entities": "./entities.js",
+          "friendlyShip": "./friendlyShip.js",
+          "constants": "./constants.js",
+          "miningLaser": "./miningLaser.js",
+          "minimap": "./minimap.js",
+          "weapons": "./weapons.js"
+        }
+      }
+    </script>
+    <style>
+      body {
+        margin: 0;
+        padding: 0;
+        background: #000;
+        font-family: 'Lucida Console', 'Courier New', monospace; /* Retro font stack */
+        overflow: hidden;
+        color: #00ff00; /* Default green text for that retro feel */
+      }
+      #gameContainer {
+        position: relative;
+        width: 100vw;
+        height: 100vh;
+      }
+      #gameContainer::after { /* Scanline effect */
+        content: "";
+        position: absolute;
+        top: 0;
+        left: 0;
+        width: 100%;
+        height: 100%;
+        pointer-events: none;
+        background: linear-gradient(
+          rgba(0, 0, 0, 0) 50%,
+          rgba(0, 0, 0, 0.15) 50%
+        );
+        background-size: 100% 4px; /* Adjust for scanline thickness */
+        z-index: 1; /* Just above the canvas, below labels */
+        opacity: 0.4; /* Subtle effect */
+      }
+      #labelContainer { /* New container for CSS2D labels */
+        position: absolute;
+        top: 0;
+        left: 0;
+        width: 100%;
+        height: 100%;
+        pointer-events: none; /* Allow clicks to pass through to the canvas */
+        overflow: hidden; /* Prevent scrollbars if labels go off-screen */
+        z-index: 10; /* Above game canvas, below main UI panels */
+      }
+      #indicatorContainer { /* Container for off-screen station indicators */
+        position: absolute;
+        top: 0;
+        left: 0;
+        width: 100%;
+        height: 100%;
+        pointer-events: none; /* Allow clicks to pass through */
+        z-index: 20; /* Above labels, below main UI panels */
+        overflow: hidden; /* Clip indicators that might go partially off-screen due to size */
+      }
+      #minimapContainer {
+        position: absolute;
+        bottom: 80px; /* Raised to avoid message panel */
+        left: 50%;
+        transform: translateX(-50%);
+        width: 150px;
+        height: 150px;
+        padding: 0;
+        overflow: hidden;
+        border-radius: 50%;
+        border: 2px solid #60A0D0; /* Consistent border */
+        pointer-events: none;
+        box-sizing: border-box;
+        z-index: 50; /* Positioned appropriately */
+      }
+      #minimapContainer canvas {
+          display: block; /* Remove extra space below canvas */
+      }
+      .station-indicator {
+        position: absolute;
+        width: 0; 
+        height: 0;
+        border-left: 10px solid transparent; /* Triangle left side */
+        border-right: 10px solid transparent; /* Triangle right side */
+        border-bottom: 15px solid rgba(0, 200, 255, 0.85); /* Triangle base, points "up" initially */
+        /* border: 1px solid #00ffff; Removed, using border for shape */
+      /* border-radius: 3px; Removed for arrow shape */
+      transform-origin: center 7.5px; /* Rotate around the center of the base of the triangle */
+      display: none; /* Initially hidden */
+      animation: pulseIndicator 2s infinite ease-in-out;
+    }
+    .jumpgate-indicator { /* Style for Jump Gate indicators */
+        position: absolute;
+        width: 0; 
+        height: 0;
+        border-left: 10px solid transparent;
+        border-right: 10px solid transparent;
+        border-bottom: 15px solid rgba(170, 0, 255, 0.85); /* Purple */
+        transform-origin: center 7.5px; /* Rotate around the center of the base */
+        display: none; /* Initially hidden */
+        animation: pulseIndicator 2s infinite ease-in-out; /* Reuse same animation */
+    }
+    @keyframes pulseIndicator {
+      0%, 100% {
+        opacity: 0.85;
+        transform: scale(1) translate(-50%, -50%) rotate(var(--indicator-rotation, 0deg)); /* Use CSS var for rotation */
+      }
+      50% {
+        opacity: 0.5;
+        transform: scale(0.85) translate(-50%, -50%) rotate(var(--indicator-rotation, 0deg));
+      }
+    } /* Closing brace for @keyframes pulseIndicator */
+    #ui {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      pointer-events: none;
+      z-index: 1000;
+    }
+      .ui-panel {
+        position: absolute;
+        background: rgba(10, 30, 50, 0.85); /* Darker, slightly desaturated blue */
+        border: 1px solid #60A0D0; /* Brighter, distinct blue border */
+        border-radius: 4px; /* Sharper corners */
+        padding: 6px 8px; /* Adjusted padding */
+        color: #90c0e0; /* Lighter, softer blue-cyan text */
+        font-size: 14px;
+        pointer-events: auto;
+        box-shadow: none; /* Removed glow */
+      }
+      .top-left {
+        top: 20px;
+        left: 20px;
+      }
+      .top-right {
+        top: 20px;
+        right: 20px;
+      }
+      .bottom-center {
+        bottom: 20px;
+        left: 50%;
+        transform: translateX(-50%);
+        min-width: 200px; /* Ensure message panel is wide enough */
+        padding: 5px 15px; /* Specific padding for message panel */
+        text-align: center; /* Center text in message panel */
+      }
+      .health-bar, .shield-bar {
+        width: 150px;
+        height: 10px; /* Adjusted height */
+        background: rgba(0, 0, 0, 0.5); /* Darker, semi-transparent background */
+        border: 1px solid #60A0D0; /* Match panel border */
+        margin: 3px 0; /* Adjusted margin */
+      }
+      .health-fill {
+        height: 100%;
+        background: #cc3333; /* Slightly darker red */
+        transition: width 0.3s;
+      }
+      .shield-fill {
+        height: 100%;
+        background: #3399dd; /* Consistent blue */
+        transition: width 0.3s;
+      }
+      .cargo-item {
+        display: flex;
+        justify-content: space-between;
+        margin: 2px 0;
+      }
+      .upgrade-btn {
+        background: #003366;
+        border: 1px solid #00ccff;
+        color: #00ccff;
+        padding: 4px 8px;
+        margin: 2px;
+        cursor: pointer;
+        font-family: inherit;
+        font-size: 12px; /* Slightly larger for readability */
+        text-transform: uppercase; /* Classic retro UI touch */
+      }
+      .upgrade-btn:hover {
+        background: #005599;
+        color: #ffffff;
+      }
+      .upgrade-btn:disabled {
+        opacity: 0.5;
+        cursor: not-allowed;
+      }
+      .message {
+        background: rgba(255, 100, 0, 0.9);
+        color: white;
+        padding: 8px 16px;
+        border-radius: 4px;
+        animation: fadeInOut 3s;
+      }
+      @keyframes fadeInOut {
+        0%, 100% { opacity: 0; }
+        20%, 80% { opacity: 1; }
+      }
+      .faction-standing-item {
+        display: flex;
+        justify-content: space-between;
+        font-size: 13px; /* Adjusted font size */
+        margin: 2px 0; /* Adjusted margin */
+        color: inherit; /* Inherit color from .ui-panel */
+      }
+      .ship-system-info {
+        display: flex;
+        justify-content: space-between;
+        font-size: 13px;
+        margin: 3px 0;
+        padding: 2px 5px;
+        background-color: rgba(0, 0, 0, 0.2);
+        border-left: 2px solid #00aaff;
+      }
+      .ship-system-info span:first-child {
+        color: #77aaff;
+      }
+      .faction-standing-item span:first-child {
+        margin-right: 10px;
+      }
+      #jumpFlashOverlay {
+        position: fixed;
+        top: 0;
+        left: 0;
+        width: 100%;
+        height: 100%;
+        background-color: white;
+        opacity: 0;
+        pointer-events: none; /* Allow clicks through */
+        z-index: 9999; /* Highest z-index */
+        transition: opacity 0.2s ease-in-out;
+      }
+#shipInfoPanel {
+  position: fixed; /* Changed to fixed for robust viewport centering */
+  z-index: 1001;   /* Ensure it's on top of other UI elements */
+  top: 50%;
+  left: 50%;
+  width: 350px;
+  max-height: 70vh;
+  overflow-y: auto;
+  padding-bottom: 40px; /* For the absolutely positioned close button */
+  /* Animation: initial state (hidden) */
+  visibility: hidden;
+  opacity: 0;
+  transform: translate(-50%, -50%) scale(0.95); /* Start slightly smaller and centered */
+  pointer-events: none; /* Make it non-interactive when hidden */
+  /* Transition for hiding: opacity, transform, and delayed visibility change */
+  transition: opacity 0.25s ease-out, transform 0.25s ease-out, visibility 0s linear 0.25s;
+}
+#shipInfoPanel.visible {
+  visibility: visible;
+  opacity: 1;
+  transform: translate(-50%, -50%) scale(1); /* End at full size and centered */
+  pointer-events: auto; /* Make it interactive when visible */
+  /* Transition for showing: opacity and transform. Visibility changes immediately. */
+  transition: opacity 0.25s ease-out, transform 0.25s ease-out;
+}
+    </style>
+  </head>
+  <body>
+    <div id="gameContainer">
+      <div id="labelContainer"></div> {/* Container for CSS2D labels */}
+      <div id="indicatorContainer"></div> {/* Container for station indicators */}
+      <div id="minimapContainer">
+        <!-- Minimap canvas will be inserted here by minimap.js -->
+      </div>
+      <div id="ui">
+        <div class="ui-panel top-left">
+          <div>Credits: $<span id="credits">1000</span></div>
+          <div class="health-bar">
+            <div class="health-fill" id="healthFill"></div>
+          </div>
+          <div>Hull: <span id="hull">100</span>%</div>
+          <div class="shield-bar">
+            <div class="shield-fill" id="shieldFill"></div>
+          </div>
+          <div>Shields: <span id="shields">100</span>%</div>
+          <div style="margin-top: 8px; padding-top: 6px; border-top: 1px solid #60A0D0;">
+            <div>Weapon: <span id="currentWeapon">Pulse Laser</span></div>
+            <div class="health-bar" style="margin-top: 2px;">
+              <div class="energy-fill" id="energyFill" style="background: #ffaa00; width: 100%;"></div>
+            </div>
+            <div>Energy: <span id="energy">100</span>%</div>
+          </div>
+        </div>
+        
+        <div class="ui-panel top-right">
+          <div>Cargo: [<span id="cargoCount">0</span>/<span id="cargoMax">10</span>]</div>
+        </div>
+        
+        <div class="ui-panel bottom-center" id="messagePanel" style="display: none;">
+          <div id="messageText"></div>
+        </div>
+        
+        <div class="ui-panel" id="upgradePanel" style="display: none; top: 50%; left: 50%; transform: translate(-50%, -50%);">
+          <h3>Ship Upgrades</h3>
+          <div>
+            <button class="upgrade-btn" id="upgradeEngine">Engine +1 ($500)</button>
+            <button class="upgrade-btn" id="upgradeWeapons">Weapons +1 ($800)</button>
+            <button class="upgrade-btn" id="upgradeCargo">Cargo +5 ($300)</button>
+          </div>
+          <button class="upgrade-btn" id="closeUpgrade">Close</button>
+        </div>
+        
+        <div class="ui-panel" id="tradePanel" style="display: none; top: 50%; left: 50%; transform: translate(-50%, -50%);">
+          <h3>Trading Post</h3>
+          <div id="tradeList"></div>
+          <button class="upgrade-btn" id="closeTrade">Close</button>
+        </div>
+        <div class="ui-panel" id="shipInfoPanel"> {/* Inline styles for position/size/display removed, handled by CSS rules now */}
+          <h3>Ship Information</h3>
+          <h4>Cargo Hold (<span id="shipInfoCargoCount">0</span>/<span id="shipInfoCargoMax">0</span>)</h4>
+          <div id="shipInfoCargoList" style="margin-bottom: 10px;">
+            <!-- Detailed cargo items will go here -->
+          </div>
+          <h4>Ship Systems</h4>
+          <div class="ship-system-info"><span>Engine Level:</span> <span id="shipInfoEngineLevel">1</span></div>
+          <div class="ship-system-info"><span>Weapon Level:</span> <span id="shipInfoWeaponLevel">1</span></div>
+          <!-- Add more system info placeholders as needed -->
+          <button class="upgrade-btn" id="closeShipInfo" style="position: absolute; bottom: 10px; left: 50%; transform: translateX(-50%);">Close</button>
+        </div>
+        <div class="ui-panel" style="bottom: 20px; left: 20px; padding: 4px 8px; font-size: 12px; opacity: 0.8;">
+          <div>Space Cargo Commander v2.1.0</div>
+        </div>
+        <div class="ui-panel" id="factionStandingsPanel" style="bottom: 20px; right: 20px; min-width: 220px;">
+          <div style="text-align: center; margin-bottom: 5px;" id="currentZoneDisplay">Alpha Sector</div>
+          <div style="text-align: center; margin-bottom: 3px; font-size: 0.9em;">Faction Standings</div>
+          <div id="standingsList">
+            <!-- Standings will be populated by JS -->
+          </div>
+        </div>
+        <div class="ui-panel" id="minimapFiltersPanel" style="position: absolute; bottom: 80px; left: calc(50% + 75px + 10px); width: auto; padding: 6px 10px; z-index: 1001;">
+          <h4 style="margin-top: 0; margin-bottom: 6px; text-align: center; font-size: 13px; color: #90c0e0; border-bottom: 1px solid #60A0D0; padding-bottom: 3px;">Filters</h4>
+          <div style="display: flex; align-items: center; margin-bottom: 3px;">
+            <input type="checkbox" id="filterMinimapAsteroids" name="filterAsteroids" checked style="margin-right: 6px; vertical-align: middle; accent-color: #60A0D0;">
+            <label for="filterMinimapAsteroids" style="font-size: 13px; color: #90c0e0; vertical-align: middle; cursor: pointer;">A</label>
+          </div>
+          <div style="display: flex; align-items: center; margin-bottom: 3px;">
+            <input type="checkbox" id="filterMinimapStations" name="filterStations" checked style="margin-right: 6px; vertical-align: middle; accent-color: #60A0D0;">
+            <label for="filterMinimapStations" style="font-size: 13px; color: #90c0e0; vertical-align: middle; cursor: pointer;">S</label>
+          </div>
+          <div style="display: flex; align-items: center;">
+            <input type="checkbox" id="filterMinimapPirates" name="filterPirates" checked style="margin-right: 6px; vertical-align: middle; accent-color: #60A0D0;">
+            <label for="filterMinimapPirates" style="font-size: 13px; color: #90c0e0; vertical-align: middle; cursor: pointer;">P</label>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div id="jumpFlashOverlay"></div>
+    <script type="module" src="main.js"></script>
+    <script src="https://storage.googleapis.com/rosebud_staticfiles/ScriptsLoader-Universal.js"></script>
+    <script src="https://storage.googleapis.com/rosebud_staticfiles/ChatManager.js"></script>
+    <script src="https://storage.googleapis.com/rosebud_staticfiles/ImageGenerator.js"></script>
+    <script src="https://storage.googleapis.com/rosebud_staticfiles/ProgressLogger.js"></script>
+    <script src="https://storage.googleapis.com/rosebud_staticfiles/OGP.js"></script>
+  </body>
+</html>

@@ -1,0 +1,40 @@
+# Manual backups folder (we'll use Git instead)
+backups/
+
+# Node modules (if we add npm packages later)
+node_modules/
+
+# OS generated files
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+
+# IDE files
+.vscode/
+.idea/
+
+# Temporary files
+*.tmp
+*.temp
+*~
+
+# Log files
+*.log
+
+# Build outputs (if we add build tools later)
+dist/
+build/
+
+# Environment files
+.env
+.env.local
+.env.development.local
+.env.test.local
+.env.production.local
+
+# Copy files (like the main - Copy - Copy... file)
+*Copy*.js
