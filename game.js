@@ -3,7 +3,7 @@ import { CSS2DRenderer, CSS2DObject } from 'three/renderers/CSS2DRenderer.js';
 // Removed duplicate imports
 import { PlayerShip } from 'ship';
 import { UIManager } from 'ui';
-import { SpaceStation, Pirate, Projectile, Asteroid, JumpGate } from 'entities';
+import { SpaceStation, Pirate, Projectile, Asteroid, JumpGate, Police } from 'entities';
 import { FriendlyShip } from 'friendlyShip'; // Use import map alias
 import { COMMODITIES_LIST } from 'constants'; // Import from constants.js
 import { MiningLaser } from 'miningLaser'; // Import the new MiningLaser class
@@ -63,7 +63,8 @@ export class SpaceCargoGame {
       projectiles: [],
       asteroids: [],
       jumpGates: [],
-      friendlyShips: [] // Add friendlyShips array
+      friendlyShips: [], // Add friendlyShips array
+      police: [] // Add police array
     };
     this.miningLaser = null; 
     this.minimap = null; // Initialize minimap reference
@@ -165,6 +166,8 @@ export class SpaceCargoGame {
     this.entities.jumpGates = [];
     this.entities.friendlyShips.forEach(fs => this.scene.remove(fs.mesh)); // Remove friendly ships
     this.entities.friendlyShips = [];                                     // Clear array
+    this.entities.police.forEach(p => this.scene.remove(p.mesh)); // Remove police
+    this.entities.police = [];                                     // Clear array
     if (this.ui) { // Check if UI is initialized
       this.ui.clearAllIndicators(); // Use new UI method
     }
@@ -245,6 +248,7 @@ export class SpaceCargoGame {
             this.scene.add(gateToAlphaSector.mesh);
         }
         this.spawnFriendlyShips(zoneId === 'alpha-sector' ? 2 : 1);
+        this.spawnPolice(zoneId, zoneConfig.factionControl);
         if (this.ui) {
             this.ui.initializeStationIndicators(this.entities.stations);
             this.ui.initializeJumpGateIndicators(this.entities.jumpGates); // Initialize jump gate indicators
@@ -283,6 +287,28 @@ export class SpaceCargoGame {
       const friendlyShip = new FriendlyShip(spawnX, spawnY, this.entities.stations, this);
       this.entities.friendlyShips.push(friendlyShip);
       this.scene.add(friendlyShip.mesh);
+    }
+  }
+
+  spawnPolice(zoneId, factionControl) {
+    // Spawn police based on zone characteristics
+    const policeCount = zoneId === 'alpha-sector' ? 2 : 1; // More police in safer zones
+    
+    for (let i = 0; i < policeCount; i++) {
+      // Spawn police near a random station
+      let spawnX, spawnY;
+      if (this.entities.stations.length > 0) {
+        const randomStation = this.entities.stations[Math.floor(Math.random() * this.entities.stations.length)];
+        spawnX = randomStation.mesh.position.x + (Math.random() - 0.5) * 40;
+        spawnY = randomStation.mesh.position.y + (Math.random() - 0.5) * 40;
+      } else {
+        spawnX = (Math.random() - 0.5) * 200;
+        spawnY = (Math.random() - 0.5) * 200;
+      }
+      
+      const police = new Police(spawnX, spawnY, this.entities.stations, factionControl);
+      this.entities.police.push(police);
+      this.scene.add(police.mesh);
     }
   }
   spawnAsteroids(count) {
@@ -675,7 +701,47 @@ export class SpaceCargoGame {
             this.gameState.shields = 0;
           }
           this.scene.remove(projectile.mesh);
+          
+          // Check if player ship is destroyed
+          if (this.gameState.hull <= 0) {
+            this.ui.showMessage('SHIP DESTROYED! Game Over!', 'combat');
+            // Could add game over logic here
+          }
           return false;
+        }
+        
+        // Check friendly ship hits
+        for (let i = this.entities.friendlyShips.length - 1; i >= 0; i--) {
+          const friendlyShip = this.entities.friendlyShips[i];
+          const distance = projectile.mesh.position.distanceTo(friendlyShip.mesh.position);
+          if (distance < 3) {
+            const destroyed = friendlyShip.takeDamage(10);
+            this.scene.remove(projectile.mesh);
+            
+            if (destroyed) {
+              this.scene.remove(friendlyShip.mesh);
+              this.entities.friendlyShips.splice(i, 1);
+              this.ui.showMessage('Friendly ship destroyed!', 'warning');
+            }
+            return false;
+          }
+        }
+        
+        // Check police hits
+        for (let i = this.entities.police.length - 1; i >= 0; i--) {
+          const police = this.entities.police[i];
+          const distance = projectile.mesh.position.distanceTo(police.mesh.position);
+          if (distance < 3) {
+            const destroyed = police.takeDamage(10);
+            this.scene.remove(projectile.mesh);
+            
+            if (destroyed) {
+              this.scene.remove(police.mesh);
+              this.entities.police.splice(i, 1);
+              this.ui.showMessage('Police ship destroyed!', 'warning');
+            }
+            return false;
+          }
         }
       }
       
@@ -687,6 +753,9 @@ export class SpaceCargoGame {
     this.entities.jumpGates.forEach(gate => gate.update(scaledDeltaTime));
     // Update friendly ships
     this.entities.friendlyShips.forEach(ship => ship.update(scaledDeltaTime));
+    
+    // Update police
+    this.entities.police.forEach(police => police.update(scaledDeltaTime, this));
     
     // Update station economies (every 30 seconds)
     const currentTime = Date.now();

@@ -27,7 +27,8 @@ export class Minimap {
             pirate: '#FF0000',       // Red
             asteroid: '#808080',     // Grey (for future use)
             jumpGate: '#FF00FF',     // Magenta
-            friendlyShip: '#FFFF00'  // Yellow
+            friendlyShip: '#FFFF00', // Yellow
+            police: '#0088FF'        // Blue
         };
         this.dotSizes = { // Radius in pixels
             player: 3,
@@ -35,7 +36,8 @@ export class Minimap {
             pirate: 2,
             asteroid: 1,
             jumpGate: 4,
-            friendlyShip: 2
+            friendlyShip: 2,
+            police: 2
         };
         this.filters = {
             asteroids: true, // Default to true as checkbox is checked initially
@@ -95,6 +97,12 @@ export class Minimap {
         this.entities.friendlyShips.forEach(ship => {
             this.drawEntityDot(ship, this.dotColors.friendlyShip, this.dotSizes.friendlyShip);
         });
+        // Draw police (always draw these for now, or add a filter)
+        if (this.entities.police) {
+            this.entities.police.forEach(police => {
+                this.drawEntityDot(police, this.dotColors.police, this.dotSizes.police);
+            });
+        }
         // Draw asteroids (conditionally)
         if (this.filters.asteroids && this.entities.asteroids) {
             this.entities.asteroids.forEach(asteroid => {

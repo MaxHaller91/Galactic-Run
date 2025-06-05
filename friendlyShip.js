@@ -17,6 +17,7 @@ export class FriendlyShip {
     this.mesh.position.set(x, y, 0);
     this.velocity = new THREE.Vector2(0, 0);
     this.maxSpeed = 20; // Slower than player for now
+    this.health = 25; // Health for friendly ships
     this.credits = 500 + Math.floor(Math.random() * 1500); // Start with some credits
     this.cargoHold = [];
     this.maxCargo = 5 + Math.floor(Math.random() * 6); // Cargo capacity 5-10
@@ -31,6 +32,8 @@ export class FriendlyShip {
     
     this.decisionCooldown = 0; // Prevent rapid state changes
     this.actionCooldown = 0; // Cooldown for buying/selling
+    this.fleeTarget = null; // For fleeing behavior when under attack
+    this.fleeTimer = 0; // How long to flee
   }
 
   createMesh() {
@@ -60,6 +63,24 @@ export class FriendlyShip {
   update(deltaTime) {
     if (this.decisionCooldown > 0) this.decisionCooldown -= deltaTime;
     if (this.actionCooldown > 0) this.actionCooldown -= deltaTime;
+    if (this.fleeTimer > 0) this.fleeTimer -= deltaTime;
+
+    // Handle fleeing behavior (overrides normal AI)
+    if (this.fleeTimer > 0 && this.fleeTarget) {
+      const dx = this.fleeTarget.mesh.position.x - this.mesh.position.x;
+      const dy = this.fleeTarget.mesh.position.y - this.mesh.position.y;
+      const distance = Math.sqrt(dx * dx + dy * dy);
+      
+      if (distance > 15) { // Move towards safety
+        this.velocity.x += (dx / distance) * (this.maxSpeed * 3) * deltaTime; // Flee faster
+        this.velocity.y += (dy / distance) * (this.maxSpeed * 3) * deltaTime;
+      } else {
+        // Reached safety, stop fleeing
+        this.fleeTimer = 0;
+        this.fleeTarget = null;
+      }
+      return; // Skip normal AI behavior while fleeing
+    }
 
     switch (this.state) {
       case AI_STATE.IDLE:
@@ -297,5 +318,32 @@ export class FriendlyShip {
       this.velocity.x += (dx / distance) * (this.maxSpeed * 2) * deltaTime; // Move faster towards target
       this.velocity.y += (dy / distance) * (this.maxSpeed * 2) * deltaTime;
     }
+  }
+
+  takeDamage(amount) {
+    this.health -= amount;
+    
+    // When damaged, friendly ships try to flee to nearest station
+    if (this.health > 0 && this.allStations.length > 0) {
+      // Find nearest station to flee to
+      let nearestStation = null;
+      let nearestDistance = Infinity;
+      
+      this.allStations.forEach(station => {
+        const distance = this.mesh.position.distanceTo(station.mesh.position);
+        if (distance < nearestDistance) {
+          nearestDistance = distance;
+          nearestStation = station;
+        }
+      });
+      
+      if (nearestStation) {
+        this.fleeTarget = nearestStation;
+        this.fleeTimer = 10; // Flee for 10 seconds
+        this.state = AI_STATE.IDLE; // Stop current activity to flee
+      }
+    }
+    
+    return this.health <= 0; // Return true if destroyed
   }
 }

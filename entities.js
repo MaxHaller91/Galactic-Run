@@ -442,6 +442,213 @@ export class SpaceStation {
   }
 }
 
+export class Police {
+  constructor(x, y, stations, faction) {
+    this.mesh = this.createMesh(faction);
+    this.mesh.position.set(x, y, 0);
+    this.velocity = new THREE.Vector2(0, 0);
+    this.maxSpeed = 20; // Slightly faster than pirates
+    this.health = 30; // More health than pirates
+    this.faction = faction;
+    this.stations = stations;
+    this.currentTargetStation = null;
+    this.patrolState = 'traveling'; // 'traveling', 'circling'
+    this.circleCount = 0;
+    this.maxCircles = 2 + Math.floor(Math.random() * 2); // 2-3 circles
+    this.circleAngle = 0;
+    this.circleRadius = 25;
+    this.detectionRange = 100; // How far they can detect pirates
+    this.attackRange = 70; // Attack range
+    this.selectNextStation();
+  }
+
+  createMesh(faction) {
+    const group = new THREE.Group();
+    
+    // Main hull - sleek police design
+    const hullGeometry = new THREE.ConeGeometry(0.6, 3, 4);
+    const factionColors = {
+      'Federated Commerce Guild': 0x0088ff, // Blue
+      'Outer Rim Prospectors': 0xffaa00,   // Orange
+    };
+    const hullColor = factionColors[faction] || 0x00aaff;
+    const hullMaterial = new THREE.MeshBasicMaterial({ color: hullColor });
+    const hull = new THREE.Mesh(hullGeometry, hullMaterial);
+    hull.rotation.z = Math.PI / 2;
+    group.add(hull);
+    
+    // Police lights
+    const lightGeometry = new THREE.SphereGeometry(0.15, 6, 6);
+    const lightMaterial = new THREE.MeshBasicMaterial({ color: 0xffffff });
+    
+    const leftLight = new THREE.Mesh(lightGeometry, lightMaterial);
+    leftLight.position.set(0.5, 0.4, 0);
+    group.add(leftLight);
+    
+    const rightLight = new THREE.Mesh(lightGeometry, lightMaterial);
+    rightLight.position.set(0.5, -0.4, 0);
+    group.add(rightLight);
+    
+    // Weapon mount
+    const weaponGeometry = new THREE.BoxGeometry(0.8, 0.2, 0.2);
+    const weaponMaterial = new THREE.MeshBasicMaterial({ color: 0x666666 });
+    const weapon = new THREE.Mesh(weaponGeometry, weaponMaterial);
+    weapon.position.set(1.2, 0, 0);
+    group.add(weapon);
+    
+    return group;
+  }
+
+  selectNextStation() {
+    if (this.stations.length === 0) return;
+    
+    // Filter stations controlled by the same faction
+    const friendlyStations = this.stations.filter(station => 
+      station.controllingFaction === this.faction
+    );
+    
+    if (friendlyStations.length === 0) {
+      // No friendly stations, pick any station
+      this.currentTargetStation = this.stations[Math.floor(Math.random() * this.stations.length)];
+    } else {
+      // Pick a random friendly station, but not the current one
+      const availableStations = friendlyStations.filter(station => 
+        station !== this.currentTargetStation
+      );
+      if (availableStations.length > 0) {
+        this.currentTargetStation = availableStations[Math.floor(Math.random() * availableStations.length)];
+      } else {
+        this.currentTargetStation = friendlyStations[0];
+      }
+    }
+    
+    this.patrolState = 'traveling';
+    this.circleCount = 0;
+    this.maxCircles = 2 + Math.floor(Math.random() * 2);
+  }
+
+  update(deltaTime, game) {
+    // Check for nearby pirates to attack
+    const nearbyPirates = game.entities.pirates.filter(pirate => {
+      const distance = pirate.mesh.position.distanceTo(this.mesh.position);
+      return distance < this.detectionRange;
+    });
+
+    if (nearbyPirates.length > 0) {
+      // Attack nearest pirate
+      const nearestPirate = nearbyPirates.reduce((nearest, pirate) => {
+        const distanceToNearest = nearest.mesh.position.distanceTo(this.mesh.position);
+        const distanceToPirate = pirate.mesh.position.distanceTo(this.mesh.position);
+        return distanceToPirate < distanceToNearest ? pirate : nearest;
+      });
+
+      this.attackPirate(nearestPirate, game, deltaTime);
+      return; // Skip normal patrol behavior when in combat
+    }
+
+    // Normal patrol behavior
+    if (!this.currentTargetStation) {
+      this.selectNextStation();
+      return;
+    }
+
+    const stationPos = this.currentTargetStation.mesh.position;
+    const distanceToStation = this.mesh.position.distanceTo(stationPos);
+
+    if (this.patrolState === 'traveling') {
+      if (distanceToStation < this.circleRadius + 5) {
+        // Arrived at station, start circling
+        this.patrolState = 'circling';
+        this.circleAngle = Math.atan2(
+          this.mesh.position.y - stationPos.y,
+          this.mesh.position.x - stationPos.x
+        );
+      } else {
+        // Travel to station
+        const dx = stationPos.x - this.mesh.position.x;
+        const dy = stationPos.y - this.mesh.position.y;
+        const distance = Math.sqrt(dx * dx + dy * dy);
+        
+        this.velocity.x += (dx / distance) * this.maxSpeed * deltaTime;
+        this.velocity.y += (dy / distance) * this.maxSpeed * deltaTime;
+      }
+    } else if (this.patrolState === 'circling') {
+      // Circle around the station
+      this.circleAngle += deltaTime * 0.8; // Circle speed
+      
+      const targetX = stationPos.x + Math.cos(this.circleAngle) * this.circleRadius;
+      const targetY = stationPos.y + Math.sin(this.circleAngle) * this.circleRadius;
+      
+      const dx = targetX - this.mesh.position.x;
+      const dy = targetY - this.mesh.position.y;
+      
+      this.velocity.x += dx * deltaTime * 3;
+      this.velocity.y += dy * deltaTime * 3;
+      
+      // Check if completed a circle
+      if (this.circleAngle > Math.PI * 2 * (this.circleCount + 1)) {
+        this.circleCount++;
+        if (this.circleCount >= this.maxCircles) {
+          // Done circling, select next station
+          this.selectNextStation();
+        }
+      }
+    }
+
+    // Apply drag and speed limit
+    this.velocity.multiplyScalar(0.95);
+    if (this.velocity.length() > this.maxSpeed) {
+      this.velocity.normalize().multiplyScalar(this.maxSpeed);
+    }
+    
+    // Update position
+    this.mesh.position.x += this.velocity.x * deltaTime;
+    this.mesh.position.y += this.velocity.y * deltaTime;
+    
+    // Face movement direction
+    if (this.velocity.length() > 0.1) {
+      const angle = Math.atan2(this.velocity.y, this.velocity.x);
+      this.mesh.rotation.z = angle + Math.PI / 2;
+    }
+  }
+
+  attackPirate(pirate, game, deltaTime) {
+    const dx = pirate.mesh.position.x - this.mesh.position.x;
+    const dy = pirate.mesh.position.y - this.mesh.position.y;
+    const distance = Math.sqrt(dx * dx + dy * dy);
+    
+    // Move towards pirate
+    this.velocity.x += (dx / distance) * this.maxSpeed * 1.2 * deltaTime;
+    this.velocity.y += (dy / distance) * this.maxSpeed * 1.2 * deltaTime;
+    
+    // Shoot at pirate
+    if (distance < this.attackRange && Math.random() < 0.015) { // Higher fire rate than pirates
+      const angleToTarget = Math.atan2(dy, dx);
+      const projectile = new Projectile(
+        this.mesh.position.x,
+        this.mesh.position.y,
+        angleToTarget,
+        false, // Not player projectile
+        2, // Police have better weapons
+        true
+      );
+      projectile.isPoliceProjectile = true; // Mark as police projectile
+      projectile.damage = 15; // More damage than regular projectiles
+      game.entities.projectiles.push(projectile);
+      game.scene.add(projectile.mesh);
+    }
+    
+    // Face the target
+    const angleToTarget = Math.atan2(dy, dx);
+    this.mesh.rotation.z = angleToTarget + Math.PI / 2;
+  }
+
+  takeDamage(amount) {
+    this.health -= amount;
+    return this.health <= 0;
+  }
+}
+
 export class Pirate {
   constructor(x, y) {
     this.mesh = this.createMesh();
@@ -485,19 +692,51 @@ export class Pirate {
     const dxPlayer = playerPosition.x - this.mesh.position.x;
     const dyPlayer = playerPosition.y - this.mesh.position.y;
     const distanceToPlayer = Math.sqrt(dxPlayer * dxPlayer + dyPlayer * dyPlayer);
-    if (!this.isAggro && distanceToPlayer < this.detectionRange) {
-      this.isAggro = true; // Player came too close
-      game.ui.showMessage('Pirate has spotted you!');
+    
+    // Check for nearby friendly ships to attack
+    let nearestTarget = null;
+    let nearestDistance = Infinity;
+    
+    // Check player
+    if (distanceToPlayer < this.detectionRange) {
+      nearestTarget = { position: playerPosition, type: 'player' };
+      nearestDistance = distanceToPlayer;
     }
-    if (this.isAggro) {
-      // Aggro behavior: chase and attack player
-      let targetX = playerPosition.x;
-      let targetY = playerPosition.y;
+    
+    // Check friendly ships
+    if (game.entities.friendlyShips) {
+      game.entities.friendlyShips.forEach(friendlyShip => {
+        const dx = friendlyShip.mesh.position.x - this.mesh.position.x;
+        const dy = friendlyShip.mesh.position.y - this.mesh.position.y;
+        const distance = Math.sqrt(dx * dx + dy * dy);
+        
+        if (distance < this.detectionRange && distance < nearestDistance) {
+          nearestTarget = { position: friendlyShip.mesh.position, type: 'friendly', ship: friendlyShip };
+          nearestDistance = distance;
+        }
+      });
+    }
+    
+    if (nearestTarget && !this.isAggro) {
+      this.isAggro = true; // Target detected
+      if (nearestTarget.type === 'player') {
+        game.ui.showMessage('Pirate has spotted you!');
+      } else {
+        game.ui.showMessage('Pirate attacking friendly ship!', 'warning');
+      }
+    }
+    if (this.isAggro && nearestTarget) {
+      // Aggro behavior: chase and attack nearest target
+      let targetX = nearestTarget.position.x;
+      let targetY = nearestTarget.position.y;
+      const targetDistance = nearestDistance;
       
       // Try to maintain some distance while attacking
-      if (distanceToPlayer < this.attackRange * 0.7) {
-        targetX = this.mesh.position.x - dxPlayer; // Move away slightly
-        targetY = this.mesh.position.y - dyPlayer;
+      if (targetDistance < this.attackRange * 0.7) {
+        const dx = nearestTarget.position.x - this.mesh.position.x;
+        const dy = nearestTarget.position.y - this.mesh.position.y;
+        targetX = this.mesh.position.x - dx; // Move away slightly
+        targetY = this.mesh.position.y - dy;
       }
       const dx = targetX - this.mesh.position.x;
       const dy = targetY - this.mesh.position.y;
@@ -506,17 +745,25 @@ export class Pirate {
           this.velocity.x += (dx / distanceToTarget) * (this.maxSpeed * 1.2) * deltaTime; // Slightly faster when aggro
           this.velocity.y += (dy / distanceToTarget) * (this.maxSpeed * 1.2) * deltaTime;
       }
-      // Pirate shooting logic (moved from game.js to pirate entity)
-      if (distanceToPlayer < this.attackRange && Math.random() < 0.01) { // Increased fire rate when in range
-        const angleToPlayer = Math.atan2(dyPlayer, dxPlayer);
+      
+      // Pirate shooting logic - shoot at nearest target
+      if (targetDistance < this.attackRange && Math.random() < 0.01) { // Increased fire rate when in range
+        const angleToTarget = Math.atan2(nearestTarget.position.y - this.mesh.position.y, nearestTarget.position.x - this.mesh.position.x);
         const projectile = new Projectile(
           this.mesh.position.x,
           this.mesh.position.y,
-          angleToPlayer,
+          angleToTarget,
           false // isPlayerProjectile = false
         );
+        projectile.targetType = nearestTarget.type; // Mark what type of target this projectile is aimed at
         game.entities.projectiles.push(projectile);
         game.scene.add(projectile.mesh);
+      }
+      
+      // Face the target
+      if (targetDistance > 1) {
+        const angleToTarget = Math.atan2(nearestTarget.position.y - this.mesh.position.y, nearestTarget.position.x - this.mesh.position.x);
+        this.mesh.rotation.z = angleToTarget + Math.PI / 2;
       }
     } else {
       // Non-aggro behavior: patrol
