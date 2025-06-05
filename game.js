@@ -682,6 +682,12 @@ export class SpaceCargoGame {
     // Update friendly ships
     this.entities.friendlyShips.forEach(ship => ship.update(deltaTime));
     
+    // Update station economies (every 30 seconds)
+    const currentTime = Date.now();
+    this.entities.stations.forEach(station => {
+      station.updateEconomy(currentTime, this);
+    });
+    
     // Update weapon system
     if (this.weaponSystem) {
       this.weaponSystem.update(deltaTime);

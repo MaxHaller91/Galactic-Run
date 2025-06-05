@@ -170,7 +170,16 @@ export class UIManager {
     const tradeList = document.getElementById('tradeList');
     const tradePanelHeader = document.querySelector('#tradePanel h3'); // Get the h3 inside tradePanel
     if (tradePanelHeader) {
-      tradePanelHeader.innerHTML = `${station.name}<br><span style="font-size: 0.8em; color: #77aaff;">Produces: ${station.productionFocus} | Consumes: ${station.consumptionFocus}</span>`;
+      // Add population and health information
+      const healthColor = station.stationHealth === 'healthy' ? '#4CAF50' : 
+                         station.stationHealth === 'struggling' ? '#FF9800' : 
+                         station.stationHealth === 'crisis' ? '#F44336' : '#666666';
+      const populationText = Math.floor(station.population).toLocaleString();
+      
+      tradePanelHeader.innerHTML = `${station.name}<br>
+        <span style="font-size: 0.8em; color: #77aaff;">Produces: ${station.productionFocus} | Consumes: ${station.consumptionFocus}</span><br>
+        <span style="font-size: 0.7em; color: ${healthColor};">Population: ${populationText} | Health: ${station.stationHealth.toUpperCase()}</span><br>
+        <span style="font-size: 0.7em; color: #aaaaaa;">Food: ${Math.floor(station.foodStock)} | Water: ${Math.floor(station.waterStock)} | Happiness: ${Math.floor(station.happiness)}%</span>`;
     }
     tradeList.innerHTML = ''; // Clear previous list items, but not the header we just set
     // Determine faction standing modifier

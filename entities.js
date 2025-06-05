@@ -9,8 +9,26 @@ export class SpaceStation {
     this.faction = factions[Math.floor(Math.random() * factions.length)];
     this.factionColors = {
       'Federated Commerce Guild': new THREE.Color(0x0088ff), // Blueish
-      'Outer Rim Prospectors': new THREE.Color(0xffaa00)  // Orangeish
+      'Outer Rim Prospectors': new THREE.Color(0xffaa00),  // Orangeish
+      'Pirates': new THREE.Color(0xff0000)  // Red for pirate-controlled stations
     };
+    
+    // Economic simulation properties
+    this.population = 800 + Math.floor(Math.random() * 1200); // 800-2000 starting population
+    this.maxPopulation = this.population * 1.5; // Room for growth
+    this.foodStock = 400 + Math.floor(Math.random() * 200); // 400-600 starting food
+    this.waterStock = 250 + Math.floor(Math.random() * 150); // 250-400 starting water
+    this.happiness = 60 + Math.floor(Math.random() * 30); // 60-90 starting happiness
+    this.lastUpdateTime = Date.now();
+    this.updateInterval = 30000; // 30 seconds
+    this.consumptionRate = {
+      food: 0.1,  // per person per day
+      water: 0.05 // per person per day
+    };
+    this.productivityMultiplier = 1.0;
+    this.controllingFaction = this.faction; // Track original vs current faction
+    this.stationHealth = 'healthy'; // 'healthy', 'struggling', 'crisis', 'abandoned'
+    
     // Assign production/consumption focus from the COMMODITIES_LIST
     const availableForProduction = COMMODITIES_LIST.filter(c => c.type === 'industrial' || c.type === 'consumer' || c.type === 'tech');
     this.productionFocus = availableForProduction[Math.floor(Math.random() * availableForProduction.length)].name;
@@ -201,6 +219,175 @@ export class SpaceStation {
       }
     });
     this.goods = newGoodsForSale;
+  }
+
+  // Economic simulation update cycle (called every 30 seconds)
+  updateEconomy(currentTime, game) {
+    if (currentTime - this.lastUpdateTime < this.updateInterval) return;
+    
+    // 1. Calculate consumption (30 seconds = 1/2880 of a day)
+    const timeRatio = this.updateInterval / (24 * 60 * 60 * 1000);
+    const foodConsumed = this.population * this.consumptionRate.food * timeRatio;
+    const waterConsumed = this.population * this.consumptionRate.water * timeRatio;
+    
+    // 2. Consume resources
+    this.foodStock = Math.max(0, this.foodStock - foodConsumed);
+    this.waterStock = Math.max(0, this.waterStock - waterConsumed);
+    
+    // 3. Update happiness based on supply levels
+    this.updateHappiness();
+    
+    // 4. Handle population changes
+    this.updatePopulation();
+    
+    // 5. Check for faction changes or pirate takeovers
+    this.checkStationControl(game);
+    
+    this.lastUpdateTime = currentTime;
+  }
+
+  updateHappiness() {
+    let happiness = 50; // Base happiness
+    
+    // Food supply (0-30 points) - based on days of supply remaining
+    const foodDays = this.foodStock / (this.population * this.consumptionRate.food);
+    happiness += Math.min(30, foodDays * 3); // 10 days = full points
+    
+    // Water supply (0-20 points)
+    const waterDays = this.waterStock / (this.population * this.consumptionRate.water);
+    happiness += Math.min(20, waterDays * 2); // 10 days = full points
+    
+    this.happiness = Math.max(0, Math.min(100, happiness));
+    
+    // Update health status and visual appearance
+    if (this.happiness >= 70) {
+      this.stationHealth = 'healthy';
+      this.setStationColor(0x00ff00); // Green
+      this.productivityMultiplier = 1.0;
+    } else if (this.happiness >= 40) {
+      this.stationHealth = 'struggling';
+      this.setStationColor(0xffff00); // Yellow
+      this.productivityMultiplier = 0.7;
+    } else if (this.happiness >= 10) {
+      this.stationHealth = 'crisis';
+      this.setStationColor(0xff0000); // Red
+      this.productivityMultiplier = 0.3;
+    } else {
+      this.stationHealth = 'abandoned';
+      this.setStationColor(0x666666); // Gray
+      this.productivityMultiplier = 0.1;
+    }
+  }
+
+  updatePopulation() {
+    if (this.stationHealth === 'abandoned') {
+      this.population = Math.max(1, this.population * 0.99); // Slow decline to minimum
+      return;
+    }
+    
+    // Population growth/decline based on happiness
+    if (this.happiness > 60) {
+      // Growth when happy (max 1% per 30 seconds = ~50% per day)
+      const growthRate = (this.happiness - 60) / 40 * 0.01;
+      this.population = Math.min(this.maxPopulation, this.population * (1 + growthRate));
+    } else if (this.happiness < 30) {
+      // Decline when unhappy
+      const declineRate = (30 - this.happiness) / 30 * 0.005;
+      this.population = Math.max(1, this.population * (1 - declineRate));
+    }
+  }
+
+  checkStationControl(game) {
+    // Pirate takeover when resources hit zero
+    if (this.foodStock <= 0 || this.waterStock <= 0) {
+      if (this.controllingFaction !== 'Pirates') {
+        this.controllingFaction = 'Pirates';
+        this.faction = 'Pirates'; // Update displayed faction
+        this.stationHealth = 'abandoned';
+        this.spawnExtraPirates(game); // Spawn 2-3 extra pirates near this station
+        this.updateLabel(); // Update label to show pirate control
+        // Show message to player
+        if (game && game.ui) {
+          game.ui.showMessage(`${this.name} has been overrun by pirates!`, 'combat');
+        }
+      }
+      return;
+    }
+    
+    // Faction revolt chance when in crisis
+    if (this.stationHealth === 'crisis' && Math.random() < 0.1) { // 10% chance per update
+      const currentZone = game.gameState.currentZoneId;
+      const opposingFaction = this.controllingFaction === 'Federated Commerce Guild' 
+        ? 'Outer Rim Prospectors' 
+        : 'Federated Commerce Guild';
+      
+      // Only revolt if opposing faction controls this zone
+      if (game.zones[currentZone].factionControl === opposingFaction) {
+        this.controllingFaction = opposingFaction;
+        this.faction = opposingFaction; // Update displayed faction
+        // Give resource boon to reset station
+        this.foodStock += 200;
+        this.waterStock += 150;
+        this.happiness = 60; // Reset to stable
+        this.updateLabel(); // Update label to show new faction
+        if (game && game.ui) {
+          game.ui.showMessage(`${this.name} has been taken over by ${opposingFaction}!`, 'warning');
+        }
+      }
+    }
+  }
+
+  spawnExtraPirates(game) {
+    // Spawn 2-3 extra pirates near this station
+    const pirateCount = 2 + Math.floor(Math.random() * 2);
+    for (let i = 0; i < pirateCount; i++) {
+      const angle = Math.random() * Math.PI * 2;
+      const distance = 20 + Math.random() * 30;
+      const x = this.mesh.position.x + Math.cos(angle) * distance;
+      const y = this.mesh.position.y + Math.sin(angle) * distance;
+      
+      const pirate = new Pirate(x, y);
+      game.entities.pirates.push(pirate);
+      game.scene.add(pirate.mesh);
+    }
+  }
+
+  setStationColor(color) {
+    // Update the station's light colors to reflect health
+    this.mesh.children.forEach(child => {
+      if (child.geometry && child.geometry.type === 'SphereGeometry') {
+        child.material.color.setHex(color);
+      }
+    });
+  }
+
+  updateLabel() {
+    // Update the station label to reflect current faction
+    if (this.label && this.label.element) {
+      const factionColorHex = this.factionColors[this.faction] ? `#${this.factionColors[this.faction].getHexString()}` : '#00ff88';
+      this.label.element.innerHTML = `${this.name}<br><span style="font-size: 0.8em; color: ${factionColorHex};">${this.faction}</span>`;
+    }
+  }
+
+  // Get adjusted prices based on station health
+  getAdjustedPrice(basePrice, isBuying) {
+    let multiplier = 1.0;
+    
+    switch(this.stationHealth) {
+      case 'healthy':
+        multiplier = 1.0; // Normal prices
+        break;
+      case 'struggling':
+        multiplier = isBuying ? 1.2 : 0.8; // 20% worse for player
+        break;
+      case 'crisis':
+        multiplier = isBuying ? 1.5 : 0.5; // 50% worse for player
+        break;
+      case 'abandoned':
+        return null; // No trading with abandoned stations
+    }
+    
+    return Math.floor(basePrice * multiplier);
   }
 }
 
