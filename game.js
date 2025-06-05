@@ -10,6 +10,7 @@ import { MiningLaser } from 'miningLaser'; // Import the new MiningLaser class
 import { Minimap } from 'minimap'; // Import the Minimap class
 import { WeaponSystem, WEAPON_TYPES } from 'weapons'; // Import the new weapon system
 import { EconomyDebugPanel } from 'economyDebug'; // Import the economy debug panel
+import { DebugSystem } from 'debug'; // Import the debug system
 export class SpaceCargoGame {
   constructor() {
     this.scene = new THREE.Scene();
@@ -79,6 +80,7 @@ export class SpaceCargoGame {
     this.miningLaser = new MiningLaser(this.scene);
     this.weaponSystem = new WeaponSystem(this); // Initialize weapon system
     this.economyDebug = new EconomyDebugPanel(this); // Initialize economy debug panel
+    this.debugSystem = new DebugSystem(this); // Initialize debug system
     // Player ship is created in loadZone, ensure it exists before minimap init uses it
     // For now, minimap constructor handles if playerShip is null initially.
     // A safer approach would be to initialize minimap after playerShip is guaranteed.
