@@ -271,7 +271,8 @@ export class UIManager {
     const messagePanel = document.getElementById('messagePanel');
     const messageText = document.getElementById('messageText');
     messageText.textContent = text;
-    // Style based on message type
+    
+    // Style based on message type (existing code)
     if (type === 'ai-trade') {
       messagePanel.style.background = 'rgba(0, 80, 150, 0.85)'; // Blueish for AI trades
       messagePanel.style.borderColor = '#00aaff';
@@ -297,11 +298,43 @@ export class UIManager {
       messagePanel.style.borderColor = '#00aaff';
       messageText.style.color = '#00ccff';
     }
+    
     messagePanel.style.display = 'block';
+    
+    // NEW: Also send to event logger if it exists
+    if (this.game && this.game.eventLogger) {
+      this.sendToEventLogger(text, type);
+    }
     
     setTimeout(() => {
       messagePanel.style.display = 'none';
     }, 3000);
+  }
+
+  // NEW: Add this method to UIManager class
+  sendToEventLogger(text, messageType) {
+    // Map UI message types to event logger categories
+    switch (messageType) {
+      case 'ai-trade':
+        this.game.eventLogger.logEconomic(text);
+        break;
+      case 'combat':
+        this.game.eventLogger.logCombat(text);
+        break;
+      case 'player-trade':
+        this.game.eventLogger.logPlayer(text);
+        break;
+      case 'system-neutral':
+      case 'info':
+        this.game.eventLogger.logStation(text);
+        break;
+      case 'warning':
+        this.game.eventLogger.logSecurity(text);
+        break;
+      default:
+        this.game.eventLogger.logPlayer(text); // Default to player category
+        break;
+    }
   }
 
   showUpgradePanel() {

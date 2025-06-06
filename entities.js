@@ -431,14 +431,29 @@ export class SimplePirate {
       closestDist = playerDist;
     }
 
-    // Check friendly ships
+    // Check friendly ships (but ignore docked ones)
     game.entities.friendlyShips.forEach(ship => {
+      if (ship.docked) return; // Skip docked ships - they're safe!
+      
       const dist = this.mesh.position.distanceTo(ship.mesh.position);
       if (dist < closestDist) {
         closest = { position: ship.mesh.position, type: 'friendly', entity: ship };
         closestDist = dist;
       }
     });
+
+    // Check traders (but ignore docked ones)
+    if (game.entities.traders) {
+      game.entities.traders.forEach(trader => {
+        if (trader.docked) return; // Skip docked traders - they're safe!
+        
+        const dist = this.mesh.position.distanceTo(trader.mesh.position);
+        if (dist < closestDist) {
+          closest = { position: trader.mesh.position, type: 'trader', entity: trader };
+          closestDist = dist;
+        }
+      });
+    }
 
     return closest;
   }
@@ -1079,8 +1094,15 @@ export class Asteroid {
     this.mesh = this.createMesh();
     this.mesh.position.set(x, y, 0);
     this.health = size * 20;
+    
+    // FOR AI MINER MINING SYSTEM
+    this.maxOre = 30;        // AI miners look for currentOre > 0
+    this.currentOre = 30;    // Start full of ore for AI miners
+    
+    // FOR PLAYER MINING SYSTEM (existing)
     this.resourceType = this.getRandomResourceType();
     this.resourceValue = this.getResourceValue(this.resourceType);
+    
     this.rotationSpeed = (Math.random() - 0.5) * 0.01;
     this.mesh.rotation.x = Math.random() * Math.PI * 2;
     this.mesh.rotation.y = Math.random() * Math.PI * 2;
@@ -1451,8 +1473,8 @@ export class SimpleStation {
 
   consumeGoods(deltaTime) {
     // Population consumes 1 produced good per 1000 people per day
-    // Convert to per-second: 1 good per 1000 people per 86400 seconds
-    const consumptionPerSecond = this.consumptionRate / 86400; // Very small number
+    // Convert to per-second: 1 good per 1000 people per 180 seconds (3 minutes = 1 game day)
+    const consumptionPerSecond = this.consumptionRate / 180; // Game time, not real time!
     const actualConsumption = consumptionPerSecond * deltaTime;
     
     // Accumulate fractional consumption
@@ -1465,9 +1487,19 @@ export class SimpleStation {
       this.consumptionAccumulator -= 1.0;
     }
     
-    // If no goods available, population becomes unhappy (future feature)
-    if (this.producedGoods === 0) {
-      // TODO: Reduce happiness, call for emergency supplies
+    // POPULATION DECLINE when no goods available - MUCH FASTER!
+    if (this.producedGoods === 0 && this.consumptionAccumulator >= 1.0) {
+      // Lose multiple people when starving - dramatic population collapse!
+      const populationLoss = Math.min(10, Math.floor(this.population * 0.01)); // Lose 1% of population or 10 people, whichever is smaller
+      this.population -= populationLoss;
+      this.consumptionAccumulator -= 1.0; // Still consume the "demand"
+      console.log(`${this.name} population declining: ${this.population} (-${populationLoss} people - STARVATION!)`);
+      
+      // Also reduce consumption rate since we have fewer people
+      this.consumptionRate = Math.max(0.1, this.population / 1000); // Don't let it go below 0.1
+      
+      // Station in crisis - lose credits too from economic collapse
+      this.credits = Math.max(0, this.credits - 50);
     }
   }
 
@@ -1627,10 +1659,21 @@ export class SimpleTrader {
     this.goods = 0;
     this.maxCargo = 8;
     
+    // CREDITS FOR TRADING - CRITICAL FIX!
+    this.credits = 1000 + Math.floor(Math.random() * 500); // Start with 1000-1500 credits
+    
     // AI STATE
     this.state = 'SEEKING'; // SEEKING, TRAVELING, TRADING
     this.target = null;
     this.tradeType = null; // 'materials' or 'goods'
+    this.actionCooldown = 0; // Prevent rapid trading loops
+    
+    // DOCKING SYSTEM
+    this.docked = false;
+    this.dockedStation = null;
+    this.dockTime = 0;
+    this.minDockTime = 5.0; // Minimum 5 seconds docked
+    this.maxDockTime = 10.0; // Maximum 10 seconds docked
   }
 
   createMesh() {
@@ -1643,6 +1686,25 @@ export class SimpleTrader {
   }
 
   update(deltaTime) {
+    // Handle docking time
+    if (this.docked) {
+      this.dockTime -= deltaTime;
+      
+      if (this.dockTime <= 0) {
+        this.undockFromStation();
+      } else {
+        // While docked, try to trade
+        this.handleDockedTrading();
+        return; // Don't move while docked
+      }
+    }
+
+    // Update cooldown timer
+    if (this.actionCooldown > 0) {
+      this.actionCooldown -= deltaTime;
+    }
+
+    // Rest of existing update logic for non-docked ships
     switch(this.state) {
       case 'SEEKING':
         this.seekTradingOpportunity();
@@ -1651,20 +1713,25 @@ export class SimpleTrader {
         this.travelToTarget(deltaTime);
         break;
       case 'TRADING':
-        this.performTrade();
+        this.arriveAtStation(); // Modified to handle docking
         break;
     }
 
-    // Apply movement
-    this.velocity.multiplyScalar(0.85);
-    if (this.velocity.length() > this.maxSpeed) {
-      this.velocity.normalize().multiplyScalar(this.maxSpeed);
+    // Apply movement (only if not docked)
+    if (!this.docked) {
+      this.velocity.multiplyScalar(0.85);
+      if (this.velocity.length() > this.maxSpeed) {
+        this.velocity.normalize().multiplyScalar(this.maxSpeed);
+      }
+      this.mesh.position.x += this.velocity.x * deltaTime;
+      this.mesh.position.y += this.velocity.y * deltaTime;
     }
-    this.mesh.position.x += this.velocity.x * deltaTime;
-    this.mesh.position.y += this.velocity.y * deltaTime;
   }
 
   seekTradingOpportunity() {
+    // Skip seeking while on cooldown
+    if (this.actionCooldown > 0) return;
+    
     // Find best trade opportunity
     const opportunities = [];
     
@@ -1740,60 +1807,184 @@ export class SimpleTrader {
     }
   }
 
-  performTrade() {
+  // NEW: Handle arrival at station (replaces old performTrade)
+  arriveAtStation() {
     if (!this.target || !this.tradeType) {
       this.state = 'SEEKING';
       return;
     }
 
+    // Dock at the station
+    this.dockAtStation(this.target);
+  }
+
+  // NEW: Dock at station
+  dockAtStation(station) {
+    // DEBUG: Check if docking is happening
+    console.log(`TRADER DOCKED: ${this.mesh.uuid.slice(0,4)} at ${station.name} with ${this.credits || 'undefined'} credits`);
+    console.log(`Planned trade: ${this.tradeType}, Cargo: materials=${this.materials}, goods=${this.goods}`);
+    
+    this.docked = true;
+    this.dockedStation = station;
+    this.dockTime = this.minDockTime + Math.random() * (this.maxDockTime - this.minDockTime);
+    
+    // Move ship to station position (visual docking)
+    this.mesh.position.copy(station.mesh.position);
+    this.velocity.set(0, 0);
+    
+    // Log docking
+    if (this.game.eventLogger) {
+      this.game.eventLogger.logEconomic(
+        `Trader ${this.mesh.uuid.slice(0, 8)} docked at ${station.name} (${this.dockTime.toFixed(1)}s)`,
+        { 
+          trader: this.mesh.uuid.slice(0, 8),
+          station: station.name,
+          action: 'dock',
+          cargo: { materials: this.materials, goods: this.goods },
+          plannedTrade: this.tradeType
+        }
+      );
+    }
+  }
+
+  // NEW: Handle trading while docked - WITH ACTUAL CREDIT EXCHANGE!
+  handleDockedTrading() {
+    if (!this.dockedStation || !this.tradeType) return;
+
+    // DEBUG: Check if trading even happens
+    console.log(`TRADING ATTEMPT: ${this.tradeType} - Trader has ${this.credits || 'undefined'} credits, Station has ${this.dockedStation.credits}`);
+
+    // DEBUG LOGGING
+    console.log(`BEFORE TRADE: Trader credits=${this.credits}, Station credits=${this.dockedStation.credits}`);
+
+    // Perform the planned trade
     let tradeSuccess = false;
-    const tradeQuantity = Math.min(3, this.maxCargo); // Trade up to 3 items
+    const tradeQuantity = Math.min(3, this.maxCargo);
 
     switch(this.tradeType) {
       case 'sell_materials':
-        if (this.materials > 0 && this.target.canBuyMaterials(tradeQuantity)) {
+        if (this.materials > 0 && this.dockedStation.canBuyMaterials(tradeQuantity)) {
           const actualQuantity = Math.min(this.materials, tradeQuantity);
-          this.materials -= actualQuantity;
-          this.target.buyMaterials(actualQuantity);
-          tradeSuccess = true;
+          const pricePerUnit = Math.floor(this.dockedStation.getMaterialPrice() * 0.8); // Trader gets 80% of station price
+          const totalPayment = pricePerUnit * actualQuantity;
+          
+          // ACTUAL CREDIT EXCHANGE
+          if (this.dockedStation.credits >= totalPayment) {
+            this.materials -= actualQuantity;
+            this.dockedStation.buyMaterials(actualQuantity);
+            this.dockedStation.credits -= totalPayment;  // Station pays
+            this.credits += totalPayment;                // Trader receives
+            tradeSuccess = true;
+            
+            if (this.game.eventLogger) {
+              this.game.eventLogger.logEconomic(
+                `Trader ${this.mesh.uuid.slice(0, 8)} sold ${actualQuantity} materials to ${this.dockedStation.name} for $${totalPayment}`,
+                { trader: this.mesh.uuid.slice(0, 8), action: 'sell', item: 'materials', quantity: actualQuantity, payment: totalPayment }
+              );
+            }
+          }
         }
         break;
         
       case 'sell_goods':
-        if (this.goods > 0 && this.target.canBuyGoods(tradeQuantity)) {
+        if (this.goods > 0 && this.dockedStation.canBuyGoods(tradeQuantity)) {
           const actualQuantity = Math.min(this.goods, tradeQuantity);
-          this.goods -= actualQuantity;
-          this.target.buyGoods(actualQuantity);
-          tradeSuccess = true;
+          const pricePerUnit = Math.floor(this.dockedStation.getGoodsPrice() * 0.9); // Trader gets 90% of station price
+          const totalPayment = pricePerUnit * actualQuantity;
+          
+          // ACTUAL CREDIT EXCHANGE
+          if (this.dockedStation.credits >= totalPayment) {
+            this.goods -= actualQuantity;
+            this.dockedStation.buyGoods(actualQuantity);
+            this.dockedStation.credits -= totalPayment;  // Station pays
+            this.credits += totalPayment;                // Trader receives
+            tradeSuccess = true;
+            
+            if (this.game.eventLogger) {
+              this.game.eventLogger.logEconomic(
+                `Trader ${this.mesh.uuid.slice(0, 8)} sold ${actualQuantity} goods to ${this.dockedStation.name} for $${totalPayment}`,
+                { trader: this.mesh.uuid.slice(0, 8), action: 'sell', item: 'goods', quantity: actualQuantity, payment: totalPayment }
+              );
+            }
+          }
         }
         break;
         
       case 'buy_materials':
-        if (this.materials + this.goods < this.maxCargo && this.target.canSellMaterials(tradeQuantity)) {
+        if (this.materials + this.goods < this.maxCargo && this.dockedStation.canSellMaterials(tradeQuantity)) {
           const actualQuantity = Math.min(tradeQuantity, this.maxCargo - (this.materials + this.goods));
-          this.materials += actualQuantity;
-          this.target.sellMaterials(actualQuantity);
-          tradeSuccess = true;
+          const pricePerUnit = this.dockedStation.getMaterialPrice();
+          const totalCost = pricePerUnit * actualQuantity;
+          
+          // ACTUAL CREDIT EXCHANGE  
+          if (this.credits >= totalCost) {
+            this.materials += actualQuantity;
+            this.dockedStation.sellMaterials(actualQuantity);
+            this.credits -= totalCost;                   // Trader pays
+            this.dockedStation.credits += totalCost;     // Station receives
+            tradeSuccess = true;
+            
+            if (this.game.eventLogger) {
+              this.game.eventLogger.logEconomic(
+                `Trader ${this.mesh.uuid.slice(0, 8)} bought ${actualQuantity} materials from ${this.dockedStation.name} for $${totalCost}`,
+                { trader: this.mesh.uuid.slice(0, 8), action: 'buy', item: 'materials', quantity: actualQuantity, cost: totalCost }
+              );
+            }
+          }
         }
         break;
         
       case 'buy_goods':
-        if (this.materials + this.goods < this.maxCargo && this.target.canSellGoods(tradeQuantity)) {
+        if (this.materials + this.goods < this.maxCargo && this.dockedStation.canSellGoods(tradeQuantity)) {
           const actualQuantity = Math.min(tradeQuantity, this.maxCargo - (this.materials + this.goods));
-          this.goods += actualQuantity;
-          this.target.sellGoods(actualQuantity);
-          tradeSuccess = true;
+          const pricePerUnit = this.dockedStation.getGoodsPrice();
+          const totalCost = pricePerUnit * actualQuantity;
+          
+          // ACTUAL CREDIT EXCHANGE
+          if (this.credits >= totalCost) {
+            this.goods += actualQuantity;
+            this.dockedStation.sellGoods(actualQuantity);
+            this.credits -= totalCost;                   // Trader pays
+            this.dockedStation.credits += totalCost;     // Station receives
+            tradeSuccess = true;
+            
+            if (this.game.eventLogger) {
+              this.game.eventLogger.logEconomic(
+                `Trader ${this.mesh.uuid.slice(0, 8)} bought ${actualQuantity} goods from ${this.dockedStation.name} for $${totalCost}`,
+                { trader: this.mesh.uuid.slice(0, 8), action: 'buy', item: 'goods', quantity: actualQuantity, cost: totalCost }
+              );
+            }
+          }
         }
         break;
     }
 
-    if (tradeSuccess && this.game.ui) {
-      this.game.ui.showMessage(`Trader: ${this.tradeType.replace('_', ' ')} at ${this.target.name}`, 'ai-trade');
+    // DEBUG LOGGING
+    console.log(`AFTER TRADE: Trader credits=${this.credits}, Station credits=${this.dockedStation.credits}`);
+
+    // Clear trade plan after attempting (successful or not)
+    this.tradeType = null;
+  }
+
+  // NEW: Undock from station
+  undockFromStation() {
+    if (this.game.eventLogger) {
+      this.game.eventLogger.logEconomic(
+        `Trader ${this.mesh.uuid.slice(0, 8)} undocked from ${this.dockedStation.name}`,
+        { 
+          trader: this.mesh.uuid.slice(0, 8),
+          station: this.dockedStation.name,
+          action: 'undock',
+          cargo: { materials: this.materials, goods: this.goods }
+        }
+      );
     }
 
-    // Reset and look for next opportunity
+    this.docked = false;
+    this.dockedStation = null;
+    this.dockTime = 0;
     this.target = null;
-    this.tradeType = null;
+    this.actionCooldown = 2.0; // Brief cooldown before seeking new opportunities
     this.state = 'SEEKING';
   }
 }
@@ -1805,6 +1996,74 @@ export class SimpleStationWithTrading extends SimpleStation {
     
     // ADD CREDITS FOR TRADING
     this.credits = 1000 + Math.floor(Math.random() * 2000);
+    
+    // MINER SPAWNING SYSTEM
+    this.miners = [];
+    this.maxMiners = 1; // Start with 1 miner per station
+    this.minerCost = { goods: 2, credits: 300 }; // Cheaper than traders
+    this.lastMinerCheck = 0;
+    this.minerCheckInterval = 10000; // Check every 10 seconds
+  }
+
+  // Override update to add debug logging and miner spawning
+  update(deltaTime, game) {
+    console.log(`${this.name}: update called, materials=${this.materials}, goods=${this.producedGoods}, credits=${this.credits}`);
+    
+    // Call parent update method
+    super.update(deltaTime, game);
+    
+    // Check for miner spawning
+    this.checkMinerSpawning(Date.now(), game);
+    
+    console.log(`${this.name}: after update, materials=${this.materials}, goods=${this.producedGoods}`);
+  }
+
+  checkMinerSpawning(currentTime, game) {
+    // Only check every 10 seconds
+    if (currentTime - this.lastMinerCheck < this.minerCheckInterval) return;
+    this.lastMinerCheck = currentTime;
+
+    // Clean up destroyed miners
+    this.miners = this.miners.filter(miner => game.entities.miners && game.entities.miners.includes(miner));
+    
+    // Do we need miners? (when materials < 5 and we can afford it)
+    if (this.miners.length < this.maxMiners && 
+        this.materials < 5 && 
+        this.producedGoods >= this.minerCost.goods && 
+        this.credits >= this.minerCost.credits) {
+      
+      this.spawnMiner(game);
+    }
+  }
+
+  spawnMiner(game) {
+    // Pay cost
+    this.producedGoods -= this.minerCost.goods;
+    this.credits -= this.minerCost.credits;
+    
+    // Spawn near station
+    const angle = Math.random() * Math.PI * 2;
+    const distance = 15 + Math.random() * 10;
+    const x = this.mesh.position.x + Math.cos(angle) * distance;
+    const y = this.mesh.position.y + Math.sin(angle) * distance;
+    
+    // Create SimpleMiner
+    const miner = new SimpleMiner(x, y, this, game);
+    
+    // Add to game
+    if (!game.entities.miners) game.entities.miners = [];
+    game.entities.miners.push(miner);
+    game.scene.add(miner.mesh);
+    this.miners.push(miner);
+    
+    // Log it
+    if (game.eventLogger) {
+      game.eventLogger.logStation(`${this.name} deployed mining ship (-${this.minerCost.goods} goods, -$${this.minerCost.credits})`);
+    }
+
+    if (game.ui) {
+      game.ui.showMessage(`${this.name} deployed mining ship!`, 'system-neutral');
+    }
   }
 
   // PLAYER TRADING METHODS
@@ -1931,6 +2190,305 @@ export class SimplePlayerCargo {
   static canCarryMore(gameState, quantity = 1) {
     const current = (gameState.materials || 0) + (gameState.goods || 0);
     return current + quantity <= gameState.maxCargo;
+  }
+}
+
+// SIMPLE MINER AI - Collects ore from asteroids and returns to station
+export class SimpleMiner {
+  constructor(x, y, homeStation, game) {
+    this.mesh = this.createMesh();
+    this.mesh.position.set(x, y, 0);
+    this.velocity = new THREE.Vector2(0, 0);
+    this.maxSpeed = 15;
+    this.homeStation = homeStation;
+    this.game = game;
+    
+    // MINING CARGO
+    this.ore = 0;
+    this.maxOre = 5; // Can carry 5 ore before returning
+    
+    // AI STATE - 3-state FSM like other ships
+    this.state = 'SEEK_ASTEROID'; // SEEK_ASTEROID, MINE, RETURN
+    this.target = null;
+    this.miningTimer = 0;
+    this.miningTimeNeeded = 3.0; // 3 seconds to mine an asteroid
+    
+    // DOCKING SYSTEM (like SimpleTrader)
+    this.docked = false;
+    this.dockedStation = null;
+    this.dockTime = 0;
+    this.minDockTime = 2.0; // Faster docking for miners
+    this.maxDockTime = 4.0;
+    
+    this.health = 30; // Lighter than traders
+    this.maxHealth = 30;
+  }
+
+  createMesh() {
+    const group = new THREE.Group();
+    // Mining ship - yellow/orange color
+    const hullGeometry = new THREE.BoxGeometry(1.8, 1.2, 0.8);
+    const hullMaterial = new THREE.MeshBasicMaterial({ color: 0xffaa00 });
+    const hull = new THREE.Mesh(hullGeometry, hullMaterial);
+    group.add(hull);
+    
+    // Mining drill
+    const drillGeometry = new THREE.CylinderGeometry(0.2, 0.3, 1, 6);
+    const drillMaterial = new THREE.MeshBasicMaterial({ color: 0x888888 });
+    const drill = new THREE.Mesh(drillGeometry, drillMaterial);
+    drill.position.set(1.1, 0, 0);
+    drill.rotation.z = Math.PI / 2;
+    group.add(drill);
+    
+    return group;
+  }
+
+  update(deltaTime) {
+    // DEBUG LOGGING FOR MINER STATE TRACKING
+    console.log(`Miner ${this.mesh.uuid.slice(0,4)}: State=${this.state}, Target=${this.target?.constructor?.name || 'none'}, Ore=${this.ore}/${this.maxOre}`);
+
+    // Handle docking time (same as trader)
+    if (this.docked) {
+      this.dockTime -= deltaTime;
+      
+      if (this.dockTime <= 0) {
+        this.undockFromStation();
+      } else {
+        // While docked, try to deliver ore
+        this.handleDockedDelivery();
+        return; // Don't move while docked
+      }
+    }
+
+    // 3-STATE FSM
+    switch(this.state) {
+      case 'SEEK_ASTEROID':
+        this.seekAsteroid(deltaTime);
+        break;
+      case 'MINE':
+        this.mineAsteroid(deltaTime);
+        break;
+      case 'RETURN':
+        this.returnToStation(deltaTime);
+        break;
+    }
+
+    // Apply movement (only if not docked)
+    if (!this.docked) {
+      this.velocity.multiplyScalar(0.85);
+      if (this.velocity.length() > this.maxSpeed) {
+        this.velocity.normalize().multiplyScalar(this.maxSpeed);
+      }
+      this.mesh.position.x += this.velocity.x * deltaTime;
+      this.mesh.position.y += this.velocity.y * deltaTime;
+    }
+  }
+
+  seekAsteroid(deltaTime) {
+    // Find closest asteroid
+    if (!this.target || !this.game.entities.asteroids.includes(this.target)) {
+      this.target = this.findClosestAsteroid();
+    }
+
+    if (!this.target) {
+      // No asteroids available, patrol around home station
+      this.patrolAroundStation(deltaTime);
+      return;
+    }
+
+    // Move toward target asteroid
+    const dx = this.target.mesh.position.x - this.mesh.position.x;
+    const dy = this.target.mesh.position.y - this.mesh.position.y;
+    const distance = Math.sqrt(dx * dx + dy * dy);
+
+    if (distance < 8) { // Close enough to start mining
+      this.state = 'MINE';
+      this.velocity.set(0, 0);
+      this.miningTimer = 0;
+    } else {
+      // Move toward asteroid
+      this.velocity.x += (dx / distance) * this.maxSpeed * deltaTime * 2;
+      this.velocity.y += (dy / distance) * this.maxSpeed * deltaTime * 2;
+      this.mesh.rotation.z = Math.atan2(dy, dx) + Math.PI / 2;
+    }
+  }
+
+  mineAsteroid(deltaTime) {
+    if (!this.target || !this.game.entities.asteroids.includes(this.target)) {
+      // Asteroid was destroyed or disappeared
+      this.state = 'SEEK_ASTEROID';
+      this.target = null;
+      return;
+    }
+
+    // Mining process
+    this.miningTimer += deltaTime;
+    
+    if (this.miningTimer >= this.miningTimeNeeded) {
+      // Successfully mined ore
+      this.ore++;
+      this.target.health -= 40; // Damage asteroid significantly
+      this.miningTimer = 0;
+
+      // Log mining
+      if (this.game.eventLogger) {
+        this.game.eventLogger.logEconomic(
+          `Miner extracted ore from asteroid (${this.ore}/${this.maxOre})`,
+          { miner: this.mesh.uuid.slice(0, 8), ore: this.ore }
+        );
+      }
+
+      // Check if asteroid is depleted
+      if (this.target.health <= 0) {
+        // Remove asteroid
+        this.game.scene.remove(this.target.mesh);
+        const asteroidIndex = this.game.entities.asteroids.indexOf(this.target);
+        if (asteroidIndex >= 0) {
+          this.game.entities.asteroids.splice(asteroidIndex, 1);
+        }
+        this.target = null;
+      }
+
+      // Check if cargo is full or should return
+      if (this.ore >= this.maxOre || !this.target) {
+        this.state = 'RETURN';
+        this.target = null;
+      } else {
+        // Continue mining same asteroid
+        this.miningTimer = 0;
+      }
+    }
+  }
+
+  returnToStation(deltaTime) {
+    // Move toward home station
+    const dx = this.homeStation.mesh.position.x - this.mesh.position.x;
+    const dy = this.homeStation.mesh.position.y - this.mesh.position.y;
+    const distance = Math.sqrt(dx * dx + dy * dy);
+
+    if (distance < 15) {
+      // Close enough to dock
+      this.dockAtStation();
+    } else {
+      // Move toward station
+      this.velocity.x += (dx / distance) * this.maxSpeed * deltaTime * 2;
+      this.velocity.y += (dy / distance) * this.maxSpeed * deltaTime * 2;
+      this.mesh.rotation.z = Math.atan2(dy, dx) + Math.PI / 2;
+    }
+  }
+
+  findClosestAsteroid() {
+    let closest = null;
+    let closestDist = 300; // Max search range
+
+    this.game.entities.asteroids.forEach(asteroid => {
+      const dist = this.mesh.position.distanceTo(asteroid.mesh.position);
+      if (dist < closestDist) {
+        closest = asteroid;
+        closestDist = dist;
+      }
+    });
+
+    return closest;
+  }
+
+  patrolAroundStation(deltaTime) {
+    // Simple patrol around home station when no asteroids
+    if (!this.patrolTarget || this.reachedTarget(this.patrolTarget, 20)) {
+      const angle = Math.random() * Math.PI * 2;
+      const distance = 30 + Math.random() * 20;
+      this.patrolTarget = {
+        x: this.homeStation.mesh.position.x + Math.cos(angle) * distance,
+        y: this.homeStation.mesh.position.y + Math.sin(angle) * distance
+      };
+    }
+    this.moveToward(this.patrolTarget, deltaTime, 0.6);
+  }
+
+  dockAtStation() {
+    this.docked = true;
+    this.dockedStation = this.homeStation;
+    this.dockTime = this.minDockTime + Math.random() * (this.maxDockTime - this.minDockTime);
+    
+    // Move ship to station position (visual docking)
+    this.mesh.position.copy(this.homeStation.mesh.position);
+    this.velocity.set(0, 0);
+    
+    // Log docking
+    if (this.game.eventLogger) {
+      this.game.eventLogger.logEconomic(
+        `Miner docked at ${this.homeStation.name} with ${this.ore} ore`,
+        { 
+          miner: this.mesh.uuid.slice(0, 8),
+          station: this.homeStation.name,
+          ore: this.ore
+        }
+      );
+    }
+  }
+
+  handleDockedDelivery() {
+    if (this.ore > 0) {
+      // Convert ore to materials (1 ore = 1 material)
+      const materialsToAdd = this.ore;
+      if (this.homeStation.canBuyMaterials(materialsToAdd)) {
+        this.homeStation.buyMaterials(materialsToAdd);
+        this.ore = 0;
+        
+        if (this.game.eventLogger) {
+          this.game.eventLogger.logEconomic(
+            `Miner delivered ${materialsToAdd} materials to ${this.homeStation.name}`,
+            { 
+              miner: this.mesh.uuid.slice(0, 8),
+              materials: materialsToAdd,
+              station: this.homeStation.name
+            }
+          );
+        }
+      }
+    }
+  }
+
+  undockFromStation() {
+    if (this.game.eventLogger) {
+      this.game.eventLogger.logEconomic(
+        `Miner undocked from ${this.homeStation.name}`,
+        { 
+          miner: this.mesh.uuid.slice(0, 8),
+          station: this.homeStation.name
+        }
+      );
+    }
+
+    this.docked = false;
+    this.dockedStation = null;
+    this.dockTime = 0;
+    this.state = 'SEEK_ASTEROID'; // Go find more asteroids
+  }
+
+  // Helper methods (same as other ships)
+  moveToward(targetPos, deltaTime, speedMod = 1.0) {
+    const dx = targetPos.x - this.mesh.position.x;
+    const dy = targetPos.y - this.mesh.position.y;
+    const dist = Math.sqrt(dx * dx + dy * dy);
+    
+    if (dist > 1) {
+      this.velocity.x += (dx / dist) * this.maxSpeed * speedMod * deltaTime * 3;
+      this.velocity.y += (dy / dist) * this.maxSpeed * speedMod * deltaTime * 3;
+    }
+    
+    this.mesh.rotation.z = Math.atan2(dy, dx) + Math.PI / 2;
+  }
+
+  reachedTarget(target, threshold) {
+    const dx = target.x - this.mesh.position.x;
+    const dy = target.y - this.mesh.position.y;
+    return Math.sqrt(dx * dx + dy * dy) < threshold;
+  }
+
+  takeDamage(amount) {
+    this.health -= amount;
+    return this.health <= 0;
   }
 }
 

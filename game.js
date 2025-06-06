@@ -10,6 +10,7 @@ import { Minimap } from 'minimap'; // Import the Minimap class
 import { WeaponSystem, WEAPON_TYPES } from 'weapons'; // Import the new weapon system
 import { EconomyDebugPanel } from 'economyDebug'; // Import the economy debug panel
 import { DebugSystem } from 'debug'; // Import the debug system
+import { ZoneEventLogger } from 'zoneEventLogger'; // Import the event logger
 export class SpaceCargoGame {
   constructor() {
     this.scene = new THREE.Scene();
@@ -75,6 +76,7 @@ export class SpaceCargoGame {
     this.miningLaser = null; 
     this.minimap = null; // Initialize minimap reference
     this.weaponSystem = null; // Initialize weapon system reference
+    this.eventLogger = null; // Initialize event logger reference
     this.timeScale = 1.0; // Add time scale property
     
     this.keys = {};
@@ -91,6 +93,8 @@ export class SpaceCargoGame {
     this.weaponSystem = new WeaponSystem(this); // Initialize weapon system
     this.economyDebug = new EconomyDebugPanel(this); // Initialize economy debug panel
     this.debugSystem = new DebugSystem(this); // Initialize debug system
+    this.eventLogger = new ZoneEventLogger(this); // Initialize event logger
+    this.eventLogger.logPlayer('Game initialized', { version: '2.4.0' });
     // Player ship is created in loadZone, ensure it exists before minimap init uses it
     // For now, minimap constructor handles if playerShip is null initially.
     // A safer approach would be to initialize minimap after playerShip is guaranteed.
@@ -227,6 +231,7 @@ export class SpaceCargoGame {
             ];
             stationPositions.forEach(pos => {
                 const station = new SimpleStationWithTrading(pos.x, pos.y, pos.name, CSS2DObject);
+                station.game = this; // Add game reference for event logging
                 this.entities.stations.push(station);
                 this.scene.add(station.mesh);
                 zoneConfig.stations.push(station.name);
@@ -252,6 +257,7 @@ export class SpaceCargoGame {
             ];
             stationPositions.forEach(pos => {
                 const station = new SimpleStationWithTrading(pos.x, pos.y, pos.name, CSS2DObject);
+                station.game = this; // Add game reference for event logging
                 this.entities.stations.push(station);
                 this.scene.add(station.mesh);
                 zoneConfig.stations.push(station.name);
@@ -892,6 +898,12 @@ export class SpaceCargoGame {
     if (this.entities.traders) {
       this.entities.traders = this.entities.traders.filter(trader => trader && trader.mesh);
       this.entities.traders.forEach(trader => trader.update(scaledDeltaTime));
+    }
+    
+    // Update miners for material supply
+    if (this.entities.miners) {
+      this.entities.miners = this.entities.miners.filter(miner => miner && miner.mesh);
+      this.entities.miners.forEach(miner => miner.update(scaledDeltaTime));
     }
     
     // Update weapon system
