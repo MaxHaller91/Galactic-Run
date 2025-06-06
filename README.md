@@ -22,9 +22,14 @@ Here's a breakdown of the key files and their roles:
 *   `game.js` (`SpaceCargoGame` class): The core game class. Manages the game loop, scene setup, entity management, player ship, game state, zone loading, input handling, UI updates, and interactions.
 *   `ship.js` (`PlayerShip` class): Defines the player's spaceship, including its movement, rotation, and weapon firing logic. (Content currently hidden from Rosie).
 *   `entities.js`: Contains classes for various game entities:
-    *   `SpaceStation`: Represents space stations with trading capabilities, factions, and unique economies.
-    *   `Pirate`: Defines enemy pirate ships with AI behavior (patrolling, aggression, combat).
-    *   `Projectile`: Represents weapon projectiles fired by player and pirates.
+    *   `SimpleStationWithTrading`: New simple stations with Materials/Goods economy and player trading.
+    *   `SimplePirate`: Enemy ships with 3-state AI (Hunt, Attack, Flee).
+    *   `SimplePolice`: Faction police that respond to distress beacons and patrol stations.
+    *   `SimpleFriendlyShip`: Civilian traders that drop distress beacons when attacked.
+    *   `SimpleTrader`: AI ships that automatically balance resources between stations.
+    *   `DistressBeacon`: Emergency signals that attract police response.
+    *   `PirateStation`: Hostile stations that spawn pirate raiders.
+    *   `Projectile`: Represents weapon projectiles fired by player and AI ships.
     *   `Asteroid`: Defines mineable asteroids with resources.
     *   `JumpGate`: Represents jump gates connecting different game zones.
 *   `friendlyShip.js` (`FriendlyShip` class): Defines non-hostile AI ships that trade and navigate the game world. (Content currently hidden from Rosie).
@@ -37,6 +42,36 @@ Here's a breakdown of the key files and their roles:
 
 This project is designed to be **buildless**.
 Simply open the `index.html` file in a modern web browser that supports ESM modules and importmaps (e.g., Chrome, Firefox, Edge). No compilation or build steps are required.
+
+## Player Trading & Economy Gameplay
+
+The game features a simple but engaging 2-resource trading system:
+
+### **Trading Interface**
+*   **Press E near stations** to open the trading panel
+*   **Buy from stations**: Materials ($50 base) and Goods ($120 base)  
+*   **Sell to stations**: Materials (80% of station price) and Goods (90% of station price)
+*   **Dynamic pricing**: Low station stock = higher prices, surplus stock = lower prices
+*   **Station info displayed**: Population, Materials, Goods, Credits, Cargo capacity
+
+### **Player Cargo System**
+*   **Simple inventory**: Just Materials and Goods (no complex item lists)
+*   **Cargo capacity**: Default 10 items, expandable with upgrades
+*   **Real-time display**: Top-right UI shows current cargo count
+
+### **Economic Gameplay Loop**
+1. **Buy Materials cheap** from stations with surplus
+2. **Watch stations produce** (2 Materials → 1 Good every 5 seconds)
+3. **Sell Goods for profit** to stations with high demand
+4. **Observe daily cycles** (3 minutes = 1 game day)
+5. **Trade with AI circulation** - SimpleTrader ships balance the economy
+
+### **Station Labels & Information**
+*   **Population count** - affects consumption rate
+*   **Materials stock** - raw resources for production
+*   **Goods stock** - manufactured items
+*   **Station credits** - available for trading
+*   **Cargo percentage** - visual capacity indicator
 
 ## Key Concepts & Architecture
 
@@ -56,10 +91,14 @@ Simply open the `index.html` file in a modern web browser that supports ESM modu
     *   Implemented in `minimap.js` using a 2D HTML Canvas.
     *   Displays entities relative to the player.
     *   Includes UI filters to toggle visibility of different entity types.
-*   **Economy**:
-    *   Stations have `productionFocus` and `consumptionFocus` for specific commodities.
-    *   Prices are influenced by these focuses, base commodity prices (from `constants.js`), and player's faction standing.
-    *   Station inventories are dynamic (`buyCommodity`, `sellCommodity`, `updateMarketGoods` in `SpaceStation` class).
+*   **Simple Economy System**:
+    *   **2-Resource Economy**: Stations use only Materials and Goods (no complex commodities).
+    *   **Production**: Stations automatically convert 2 Materials → 1 Produced Good every 5 seconds.
+    *   **Consumption**: Station population consumes 1 Good per 1000 people per day.
+    *   **Day Counter**: 3 minutes = 1 game day for observable economic cycles.
+    *   **Dynamic Pricing**: Prices fluctuate based on station scarcity (low stock = higher prices).
+    *   **SimpleTrader AI**: Autonomous trader ships balance resources between stations.
+    *   **Station Credits**: Each station has 1000-3000 credits for player trading.
 
 ## Development Workflow
 

@@ -65,21 +65,33 @@ export class FriendlyShip {
     if (this.actionCooldown > 0) this.actionCooldown -= deltaTime;
     if (this.fleeTimer > 0) this.fleeTimer -= deltaTime;
 
-    // Handle fleeing behavior (overrides normal AI)
+    // IMPROVEMENT: Better flee handling
     if (this.fleeTimer > 0 && this.fleeTarget) {
       const dx = this.fleeTarget.mesh.position.x - this.mesh.position.x;
       const dy = this.fleeTarget.mesh.position.y - this.mesh.position.y;
       const distance = Math.sqrt(dx * dx + dy * dy);
       
-      if (distance > 15) { // Move towards safety
-        this.velocity.x += (dx / distance) * (this.maxSpeed * 3) * deltaTime; // Flee faster
-        this.velocity.y += (dy / distance) * (this.maxSpeed * 3) * deltaTime;
+      if (distance > 25) {
+        // Move towards safety FASTER
+        this.velocity.x += (dx / distance) * (this.maxSpeed * 2.5) * deltaTime;
+        this.velocity.y += (dy / distance) * (this.maxSpeed * 2.5) * deltaTime;
       } else {
         // Reached safety, stop fleeing
         this.fleeTimer = 0;
         this.fleeTarget = null;
+        this.state = AI_STATE.IDLE; // Reset to normal behavior
       }
-      return; // Skip normal AI behavior while fleeing
+      // Apply movement and return early (skip normal AI)
+      this.velocity.multiplyScalar(0.95);
+      if (this.velocity.length() > this.maxSpeed * 2) {
+        this.velocity.normalize().multiplyScalar(this.maxSpeed * 2);
+      }
+      this.mesh.position.x += this.velocity.x * deltaTime;
+      this.mesh.position.y += this.velocity.y * deltaTime;
+      if (this.velocity.length() > 0.1) {
+        this.mesh.rotation.z = Math.atan2(this.velocity.y, this.velocity.x) + Math.PI / 2;
+      }
+      return; // Don't do normal AI while fleeing
     }
 
     switch (this.state) {

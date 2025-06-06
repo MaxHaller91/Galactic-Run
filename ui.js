@@ -1,4 +1,148 @@
 import * as THREE from 'three';
+
+// Import simple trading classes
+class SimpleTradeUI {
+  static showSimpleTradePanel(station, gameState, ui) {
+    const tradePanel = document.getElementById('tradePanel');
+    const tradeList = document.getElementById('tradeList');
+    const tradePanelHeader = document.querySelector('#tradePanel h3');
+    
+    if (tradePanelHeader) {
+      const status = station.getEconomicStatus();
+      tradePanelHeader.innerHTML = `${station.name}<br>
+        <span style="font-size: 0.8em; color: #77aaff;">Population: ${status.population}</span><br>
+        <span style="font-size: 0.7em; color: #00ffff;">Materials: ${status.materials} | Goods: ${status.goods}</span><br>
+        <span style="font-size: 0.7em; color: #ffff00;">Station Credits: ${station.credits}</span><br>
+        <span style="font-size: 0.6em; color: #aaaaaa;">Cargo: ${status.totalCargo}/${station.maxCargo}</span>`;
+    }
+
+    tradeList.innerHTML = '';
+    
+    const tradeOptions = station.getTradeOptions();
+    const playerCargo = SimplePlayerCargo.getPlayerCargoStatus(gameState);
+
+    // PLAYER BUYS FROM STATION
+    if (tradeOptions.selling.materials.canSell) {
+      const buyMaterialsBtn = document.createElement('button');
+      buyMaterialsBtn.className = 'upgrade-btn';
+      buyMaterialsBtn.innerHTML = `Buy Materials ($${tradeOptions.selling.materials.price}) [${tradeOptions.selling.materials.available}]`;
+      buyMaterialsBtn.disabled = gameState.credits < tradeOptions.selling.materials.price || !SimplePlayerCargo.canCarryMore(gameState);
+      
+      buyMaterialsBtn.addEventListener('click', () => {
+        const result = station.playerBuyMaterials(1, gameState.credits);
+        if (result.success) {
+          gameState.credits -= result.cost;
+          gameState.materials = (gameState.materials || 0) + 1;
+          ui.showMessage(`Bought 1 Materials for $${result.cost}`, 'player-trade');
+          SimpleTradeUI.showSimpleTradePanel(station, gameState, ui); // Refresh
+        } else {
+          ui.showMessage(`Cannot buy: ${result.reason}`, 'warning');
+        }
+      });
+      tradeList.appendChild(buyMaterialsBtn);
+    }
+
+    if (tradeOptions.selling.goods.canSell) {
+      const buyGoodsBtn = document.createElement('button');
+      buyGoodsBtn.className = 'upgrade-btn';
+      buyGoodsBtn.innerHTML = `Buy Goods ($${tradeOptions.selling.goods.price}) [${tradeOptions.selling.goods.available}]`;
+      buyGoodsBtn.disabled = gameState.credits < tradeOptions.selling.goods.price || !SimplePlayerCargo.canCarryMore(gameState);
+      
+      buyGoodsBtn.addEventListener('click', () => {
+        const result = station.playerBuyGoods(1, gameState.credits);
+        if (result.success) {
+          gameState.credits -= result.cost;
+          gameState.goods = (gameState.goods || 0) + 1;
+          ui.showMessage(`Bought 1 Goods for $${result.cost}`, 'player-trade');
+          SimpleTradeUI.showSimpleTradePanel(station, gameState, ui); // Refresh
+        } else {
+          ui.showMessage(`Cannot buy: ${result.reason}`, 'warning');
+        }
+      });
+      tradeList.appendChild(buyGoodsBtn);
+    }
+
+    // PLAYER SELLS TO STATION
+    if (playerCargo.materials > 0 && tradeOptions.buying.materials.canBuy) {
+      const sellMaterialsBtn = document.createElement('button');
+      sellMaterialsBtn.className = 'upgrade-btn';
+      sellMaterialsBtn.innerHTML = `Sell Materials ($${tradeOptions.buying.materials.price}) [You have: ${playerCargo.materials}]`;
+      sellMaterialsBtn.style.borderColor = '#4CAF50';
+      
+      sellMaterialsBtn.addEventListener('click', () => {
+        const result = station.playerSellMaterials(1, gameState.materials);
+        if (result.success) {
+          gameState.credits += result.value;
+          gameState.materials -= 1;
+          ui.showMessage(`Sold 1 Materials for $${result.value}`, 'player-trade');
+          SimpleTradeUI.showSimpleTradePanel(station, gameState, ui); // Refresh
+        } else {
+          ui.showMessage(`Cannot sell: ${result.reason}`, 'warning');
+        }
+      });
+      tradeList.appendChild(sellMaterialsBtn);
+    }
+
+    if (playerCargo.goods > 0 && tradeOptions.buying.goods.canBuy) {
+      const sellGoodsBtn = document.createElement('button');
+      sellGoodsBtn.className = 'upgrade-btn';
+      sellGoodsBtn.innerHTML = `Sell Goods ($${tradeOptions.buying.goods.price}) [You have: ${playerCargo.goods}]`;
+      sellGoodsBtn.style.borderColor = '#4CAF50';
+      
+      sellGoodsBtn.addEventListener('click', () => {
+        const result = station.playerSellGoods(1, gameState.goods);
+        if (result.success) {
+          gameState.credits += result.value;
+          gameState.goods -= 1;
+          ui.showMessage(`Sold 1 Goods for $${result.value}`, 'player-trade');
+          SimpleTradeUI.showSimpleTradePanel(station, gameState, ui); // Refresh
+        } else {
+          ui.showMessage(`Cannot sell: ${result.reason}`, 'warning');
+        }
+      });
+      tradeList.appendChild(sellGoodsBtn);
+    }
+
+    // Add upgrade option
+    const upgradeBtn = document.createElement('button');
+    upgradeBtn.className = 'upgrade-btn';
+    upgradeBtn.textContent = 'Ship Upgrades';
+    upgradeBtn.addEventListener('click', () => {
+      ui.hideTradePanel();
+      ui.showUpgradePanel();
+    });
+    tradeList.appendChild(upgradeBtn);
+
+    // CLOSE BUTTON
+    const closeBtn = document.createElement('button');
+    closeBtn.className = 'upgrade-btn';
+    closeBtn.textContent = 'Close';
+    closeBtn.addEventListener('click', () => {
+      tradePanel.style.display = 'none';
+    });
+    tradeList.appendChild(closeBtn);
+
+    tradePanel.style.display = 'block';
+  }
+}
+
+class SimplePlayerCargo {
+  static getPlayerCargoStatus(gameState) {
+    return {
+      materials: gameState.materials || 0,
+      goods: gameState.goods || 0,
+      totalCargo: (gameState.materials || 0) + (gameState.goods || 0),
+      maxCargo: gameState.maxCargo,
+      cargoSpace: gameState.maxCargo - ((gameState.materials || 0) + (gameState.goods || 0))
+    };
+  }
+
+  static canCarryMore(gameState, quantity = 1) {
+    const current = (gameState.materials || 0) + (gameState.goods || 0);
+    return current + quantity <= gameState.maxCargo;
+  }
+}
+
 export class UIManager {
   constructor(gameState, gameZones, gameInstance) { // Add gameInstance
     this.gameState = gameState;
@@ -51,8 +195,11 @@ export class UIManager {
     document.getElementById('credits').textContent = this.gameState.credits;
     document.getElementById('hull').textContent = Math.ceil(this.gameState.hull);
     document.getElementById('shields').textContent = Math.ceil(this.gameState.shields);
-    document.getElementById('cargoCount').textContent = this.gameState.cargo.length;
-    document.getElementById('cargoMax').textContent = this.gameState.maxCargo;
+    
+    // Update cargo display to use simple cargo system
+    const playerCargo = SimplePlayerCargo.getPlayerCargoStatus(this.gameState);
+    document.getElementById('cargoCount').textContent = playerCargo.totalCargo;
+    document.getElementById('cargoMax').textContent = playerCargo.maxCargo;
     
     // Update health bars
     document.getElementById('healthFill').style.width = `${this.gameState.hull}%`;
@@ -166,172 +313,8 @@ export class UIManager {
   }
 
   showTradePanel(station) {
-    const tradePanel = document.getElementById('tradePanel');
-    const tradeList = document.getElementById('tradeList');
-    const tradePanelHeader = document.querySelector('#tradePanel h3'); // Get the h3 inside tradePanel
-    if (tradePanelHeader) {
-      // Add population and health information
-      const healthColor = station.stationHealth === 'healthy' ? '#4CAF50' : 
-                         station.stationHealth === 'struggling' ? '#FF9800' : 
-                         station.stationHealth === 'crisis' ? '#F44336' : '#666666';
-      const populationText = Math.floor(station.population).toLocaleString();
-      
-      // Calculate station wealth and get governor status
-      const stationWealth = station.calculateWealth ? station.calculateWealth() : station.credits;
-      const governorStatus = this.getGovernorStatus(station);
-      const cargoInfo = this.getStationCargoInfo(station);
-      
-      tradePanelHeader.innerHTML = `${station.name}<br>
-        <span style="font-size: 0.8em; color: #77aaff;">${station.stationType.toUpperCase()} STATION | Tier ${station.tier}</span><br>
-        <span style="font-size: 0.7em; color: #ffaa00;">Credits: ${station.credits.toLocaleString()} | Wealth: ${stationWealth.toLocaleString()}</span><br>
-        <span style="font-size: 0.7em; color: ${healthColor};">Population: ${populationText} | Health: ${station.stationHealth.toUpperCase()}</span><br>
-        <span style="font-size: 0.7em; color: #aaaaaa;">Food: ${Math.floor(station.foodStock)} | Water: ${Math.floor(station.waterStock)} | Happiness: ${Math.floor(station.happiness)}%</span><br>
-        <span style="font-size: 0.6em; color: #888888;">Produces: ${station.productionFocus} | Consumes: ${station.consumptionFocus}</span><br>
-        <span style="font-size: 0.6em; color: #cccccc;">Governor: ${governorStatus}</span><br>
-        <span style="font-size: 0.6em; color: #aaccff;">Cargo: ${cargoInfo}</span>`;
-    }
-    tradeList.innerHTML = ''; // Clear previous list items, but not the header we just set
-    // Determine faction standing modifier
-    let priceModifier = 1.0; // Neutral
-    const standing = this.gameState.factionStandings[station.faction] || 0;
-    let standingText = "";
-    if (standing > 10) { // Friendly
-      priceModifier = 0.9; // 10% discount on buys, 10% bonus on sells
-      standingText = ` <span style="color: #4CAF50;">(Friendly Discount)</span>`;
-    } else if (standing < -10) { // Unfriendly (placeholder for now)
-      priceModifier = 1.1; // 10% markup on buys, 10% penalty on sells
-      standingText = ` <span style="color: #F44336;">(Unfriendly Markup)</span>`;
-    }
-    // Add buy options - only show items the station actually has in stock
-    station.goods.forEach(marketGood => {
-      // Check if station actually has this item in inventory
-      const stationStock = station.inventory[marketGood.name] || 0;
-      if (stationStock > 0 && this.gameState.cargo.length < this.gameState.maxCargo) {
-        const buyBtn = document.createElement('button');
-        buyBtn.className = 'upgrade-btn';
-        
-        // Player buys at station's sell price, adjusted by faction standing
-        const actualSellPrice = Math.floor(marketGood.stationBaseSellPrice * (standing > 10 ? 0.9 : (standing < -10 ? 1.1 : 1.0)));
-        
-        let buyText = `Buy ${marketGood.name} ($${actualSellPrice}) [${stationStock}]`;
-        if (marketGood.name === station.productionFocus) {
-          buyText += ` <span style="color: #4CAF50;">(Surplus)</span>`;
-          buyBtn.style.borderColor = '#4CAF50';
-        } else if (marketGood.name === station.consumptionFocus) {
-           buyBtn.style.borderColor = '#FF9800'; // Orange if it's a consumed good (rarer to find for sale)
-        }
-        if (standing > 10) buyText += ` <span style="font-size:0.9em; color: lightgreen;">Friendly Price!</span>`;
-        else if (standing < -10) buyText += ` <span style="font-size:0.9em; color: salmon;">Unfriendly Price!</span>`;
-        buyBtn.innerHTML = buyText; // Use innerHTML for span
-        buyBtn.disabled = this.gameState.credits < actualSellPrice;
-        buyBtn.addEventListener('click', () => {
-          if (this.gameState.credits >= actualSellPrice && this.gameState.cargo.length < this.gameState.maxCargo) {
-            this.gameState.credits -= actualSellPrice;
-            this.gameState.cargo.push({
-              name: marketGood.name,
-              type: marketGood.type,
-              paidPrice: actualSellPrice,
-              basePrice: marketGood.basePrice
-            });
-            // Station's inventory decreases
-            station.buyCommodity(marketGood.name, 1);
-            let buyMessage = `Bought ${marketGood.name} for $${actualSellPrice}`;
-            if (station.faction && this.gameState.factionStandings.hasOwnProperty(station.faction)) {
-              this.gameState.factionStandings[station.faction] += 1;
-              buyMessage += `. +1 Standing with ${station.faction}`;
-            }
-            this.showMessage(buyMessage, 'player-trade');
-            this.showTradePanel(station); // Refresh panel
-          }
-        });
-        tradeList.appendChild(buyBtn);
-      }
-    });
-    
-    // Add sell options (Player Sells to Station)
-    this.gameState.cargo.forEach((cargoItem, index) => {
-      // Find if the current station is interested in this cargo item
-      const stationGoodMatch = station.goods.find(sg => sg.name === cargoItem.name);
-      let actualBuyPrice; // Price station pays player, adjusted by faction standing
-      if (stationGoodMatch) {
-        actualBuyPrice = Math.floor(stationGoodMatch.stationBaseBuyPrice * (standing > 10 ? 1.1 : (standing < -10 ? 0.9 : 1.0)));
-      } else {
-        // Station doesn't normally trade this, offer a very low price
-        actualBuyPrice = Math.floor(cargoItem.basePrice * 0.5 * (standing > 10 ? 1.1 : (standing < -10 ? 0.9 : 1.0))); // Low base, still affected by standing
-      }
-      
-      const sellBtn = document.createElement('button');
-      sellBtn.className = 'upgrade-btn';
-      let sellText = `Sell ${cargoItem.name} ($${actualBuyPrice})`;
-      
-      // Profit/Loss indicator
-      const profit = actualBuyPrice - cargoItem.paidPrice;
-      if (profit > 0) {
-        sellText += ` <span style="color: #4CAF50;">(Profit: $${profit})</span>`;
-        sellBtn.style.borderColor = '#4CAF50'; // Green for profit
-      } else if (profit < 0) {
-        sellText += ` <span style="color: #F44336;">(Loss: $${Math.abs(profit)})</span>`;
-        sellBtn.style.borderColor = '#F44336'; // Red for loss
-      } else {
-        sellText += ` (Break Even)`;
-      }
-      if (standing > 10) sellText += ` <span style="font-size:0.9em; color: lightgreen;">Friendly Bonus!</span>`;
-      else if (standing < -10) sellText += ` <span style="font-size:0.9em; color: salmon;">Unfriendly Penalty!</span>`;
-      // Highlight if this station has high demand for the item
-      if (stationGoodMatch && cargoItem.name === station.consumptionFocus) {
-        sellText += ` <span style="color: #2196F3;">(High Demand!)</span>`;
-        // Keep profit color for border or override if high demand is more important
-        sellBtn.style.borderColor = '#2196F3';
-      }
-      
-      sellBtn.innerHTML = sellText; // Use innerHTML for spans
-      sellBtn.addEventListener('click', () => {
-        this.gameState.credits += actualBuyPrice;
-        // Station's inventory increases
-        station.sellCommodity(cargoItem.name, 1);
-        this.gameState.cargo.splice(index, 1);
-        let sellMsg = `Sold ${cargoItem.name} for $${actualBuyPrice}`;
-        
-        // Award standing for profitable sales (original profit before faction bonus)
-        const originalProfit = stationGoodMatch ? stationGoodMatch.stationBaseBuyPrice - cargoItem.paidPrice : (cargoItem.basePrice * 0.5) - cargoItem.paidPrice;
-        if (originalProfit > 0 && station.faction && this.gameState.factionStandings.hasOwnProperty(station.faction)) {
-            this.gameState.factionStandings[station.faction] += 1;
-            sellMsg += `. +1 Standing with ${station.faction}`;
-        }
-        this.showMessage(sellMsg, 'player-trade');
-        this.showTradePanel(station); // Refresh panel
-      });
-      tradeList.appendChild(sellBtn);
-    });
-    
-    // Add upgrade option
-    const upgradeBtn = document.createElement('button');
-    upgradeBtn.className = 'upgrade-btn';
-    upgradeBtn.textContent = 'Ship Upgrades';
-    upgradeBtn.addEventListener('click', () => {
-      this.hideTradePanel();
-      this.showUpgradePanel();
-    });
-    tradeList.appendChild(upgradeBtn);
-    // Add repair option
-    if (this.gameState.hull < 100) {
-      const repairCost = Math.floor((100 - this.gameState.hull) * 2.5); // 2.5 credits per hull point
-      const repairBtn = document.createElement('button');
-      repairBtn.className = 'upgrade-btn';
-      repairBtn.textContent = `Repair Hull ($${repairCost})`;
-      repairBtn.disabled = this.gameState.credits < repairCost || this.gameState.hull >= 100;
-      repairBtn.addEventListener('click', () => {
-        if (this.gameState.credits >= repairCost && this.gameState.hull < 100) {
-          this.gameState.credits -= repairCost;
-          this.gameState.hull = 100;
-          this.showMessage('Hull repaired!', 'system');
-          this.showTradePanel(station); // Refresh panel to update button state
-        }
-      });
-      tradeList.appendChild(repairBtn);
-    }
-    
-    tradePanel.style.display = 'block';
+    // Use the new simple trade interface
+    SimpleTradeUI.showSimpleTradePanel(station, this.gameState, this);
   }
 
   hideTradePanel() {
@@ -353,24 +336,37 @@ export class UIManager {
     const cargoMaxEl = document.getElementById('shipInfoCargoMax');
     const cargoListEl = document.getElementById('shipInfoCargoList');
     if (!cargoCountEl || !cargoMaxEl || !cargoListEl) return;
-    cargoCountEl.textContent = this.gameState.cargo.length;
-    cargoMaxEl.textContent = this.gameState.maxCargo;
+    
+    // Use simple cargo system
+    const playerCargo = SimplePlayerCargo.getPlayerCargoStatus(this.gameState);
+    cargoCountEl.textContent = playerCargo.totalCargo;
+    cargoMaxEl.textContent = playerCargo.maxCargo;
     cargoListEl.innerHTML = ''; // Clear previous items
-    if (this.gameState.cargo.length === 0) {
+    
+    if (playerCargo.totalCargo === 0) {
         const div = document.createElement('div');
         div.textContent = 'Cargo hold is empty.';
         div.style.fontStyle = 'italic';
         div.style.color = '#77aaff';
         cargoListEl.appendChild(div);
     } else {
-        this.gameState.cargo.forEach(item => {
+        // Show Materials
+        if (playerCargo.materials > 0) {
             const div = document.createElement('div');
-            div.className = 'cargo-item'; // Reuse existing style
-            // Display name, paid price. Could add current market value or profit/loss later.
-            div.innerHTML = `<span>${item.name}</span><span>Paid: $${item.paidPrice}</span>`;
+            div.className = 'cargo-item';
+            div.innerHTML = `<span>Materials</span><span>Qty: ${playerCargo.materials}</span>`;
             cargoListEl.appendChild(div);
-        });
+        }
+        
+        // Show Goods
+        if (playerCargo.goods > 0) {
+            const div = document.createElement('div');
+            div.className = 'cargo-item';
+            div.innerHTML = `<span>Produced Goods</span><span>Qty: ${playerCargo.goods}</span>`;
+            cargoListEl.appendChild(div);
+        }
     }
+    
     // Populate ship system details
     const engineLevelEl = document.getElementById('shipInfoEngineLevel');
     const weaponLevelEl = document.getElementById('shipInfoWeaponLevel');
