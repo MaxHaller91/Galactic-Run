@@ -1464,14 +1464,20 @@ export class SimpleStationWithTrading {
     this.mesh = this.createMesh();
     this.mesh.position.set(x, y, 0);
     
-    // SIMPLE CARGO SYSTEM
+    // SIMPLE CARGO SYSTEM + FOOD
     this.materials = 5 + Math.floor(Math.random() * 15); // 5-20 materials to start
     this.producedGoods = 2 + Math.floor(Math.random() * 8); // 2-10 produced goods to start
-    this.maxCargo = 50; // Can hold up to 50 total items
+    this.food = 3 + Math.floor(Math.random() * 7); // 3-10 food to start (CRITICAL RESOURCE)
+    this.maxCargo = 50; // Can hold up to 50 total items (materials + goods + food)
     
     // POPULATION & CONSUMPTION
     this.population = 800 + Math.floor(Math.random() * 1200);
     this.consumptionRate = this.population / 1000; // 1 good per 1000 people per day
+    
+    // STATION SPECIALIZATION SYSTEM
+    const stationTypes = ['mining', 'agricultural', 'manufacturing', 'trade_hub'];
+    this.stationType = stationTypes[Math.floor(Math.random() * stationTypes.length)];
+    this.productionModifiers = this.getProductionModifiers();
     
     // POPULATION DYNAMICS (Simple happiness system)
     this.happiness = 50; // 0-100 scale
@@ -1613,6 +1619,27 @@ export class SimpleStationWithTrading {
       this.consumptionAccumulator -= 1.0;
     }
     
+    // ADD CRITICAL FOOD CONSUMPTION
+    if (!this.foodConsumptionAccumulator) this.foodConsumptionAccumulator = 0;
+    this.foodConsumptionAccumulator += actualConsumption * 0.8; // Food consumption rate
+    
+    if (this.foodConsumptionAccumulator >= 1.0) {
+      if (this.food > 0) {
+        this.food--;
+        this.foodConsumptionAccumulator -= 1.0;
+      } else {
+        // STARVATION - much worse than no goods
+        const starvationLoss = Math.min(20, Math.floor(this.population * 0.03)); // 3% population loss
+        this.population -= starvationLoss;
+        this.foodConsumptionAccumulator -= 1.0;
+        
+        // Starvation also halts production
+        if (this.stationType === 'mining') {
+          this.materials = Math.max(0, this.materials - 1); // Workers abandon equipment
+        }
+      }
+    }
+    
     // POPULATION DECLINE when no goods available - MUCH FASTER!
     if (this.producedGoods === 0 && this.consumptionAccumulator >= 1.0) {
       // Lose multiple people when starving - dramatic population collapse!
@@ -1633,19 +1660,40 @@ export class SimpleStationWithTrading {
     // Only try to produce every few seconds
     if (currentTime - this.lastProductionTime < this.productionInterval) return;
     
-    // Need 2 materials to produce 1 good
-    if (this.materials >= 2) {
-      // Check if we have cargo space
-      const totalCargo = this.materials + this.producedGoods;
-      if (totalCargo < this.maxCargo) {
-        // Produce!
-        this.materials -= 2;
-        this.producedGoods += 1;
-        this.lastProductionTime = currentTime;
-        
-        // Visual feedback for production
-        this.showProductionEffect();
-      }
+    // Check if we have cargo space first
+    const totalCargo = this.materials + this.producedGoods + this.food;
+    if (totalCargo >= this.maxCargo) return;
+    
+    // SPECIALIZED PRODUCTION BASED ON STATION TYPE
+    let produced = false;
+    
+    if (this.stationType === 'mining' && this.food >= 1) {
+      // Mining: 1 food → 3 materials (needs food for workers)
+      this.food--;
+      this.materials += Math.floor(3 * this.productionModifiers.materials);
+      produced = true;
+      
+    } else if (this.stationType === 'agricultural' && this.materials >= 1) {
+      // Agriculture: 1 material → 3 food (needs materials for equipment)
+      this.materials--;
+      this.food += Math.floor(3 * this.productionModifiers.food);
+      produced = true;
+      
+    } else if (this.stationType === 'manufacturing' && this.materials >= 2 && this.food >= 1) {
+      // Manufacturing: 2 materials + 1 food → 2 goods (existing logic + food requirement)
+      this.materials -= 2;
+      this.food--;
+      this.producedGoods += Math.floor(2 * this.productionModifiers.goods);
+      produced = true;
+      
+    } else if (this.stationType === 'trade_hub') {
+      // Trade hubs don't produce, they just facilitate trade
+      produced = false;
+    }
+    
+    if (produced) {
+      this.lastProductionTime = currentTime;
+      this.showProductionEffect();
     }
   }
 
@@ -1686,6 +1734,21 @@ export class SimpleStationWithTrading {
     
     this.population = Math.max(100, Math.min(3000, this.population));
     this.consumptionRate = this.population / 1000;
+  }
+
+  getProductionModifiers() {
+    switch(this.stationType) {
+      case 'mining':
+        return { materials: 2.0, goods: 0.3, food: 0.1 }; // Great at materials, awful at food
+      case 'agricultural': 
+        return { materials: 0.2, goods: 0.3, food: 2.0 }; // Great at food, awful at materials
+      case 'manufacturing':
+        return { materials: 0.5, goods: 2.0, food: 0.2 }; // Great at goods, needs food imports
+      case 'trade_hub':
+        return { materials: 0.1, goods: 0.1, food: 0.1 }; // Terrible at everything, just trades
+      default:
+        return { materials: 1.0, goods: 1.0, food: 1.0 };
+    }
   }
 
   recordPirateAttack() {
@@ -1912,16 +1975,29 @@ export class SimpleStationWithTrading {
     };
   }
 
-  // UPDATE LABEL TO SHOW HAPPINESS WITH EMOJI
+  // UPDATE LABEL TO SHOW STATION TYPE + FOOD STATUS
   updateLabelContent(div) {
-    const totalCargo = this.materials + this.producedGoods;
+    const totalCargo = this.materials + this.producedGoods + this.food;
     const cargoPercent = Math.floor((totalCargo / this.maxCargo) * 100);
     const happinessIcon = this.happiness >= 70 ? '😊' : this.happiness >= 40 ? '😐' : '😞';
     
-    div.innerHTML = `${this.name}<br>
+    // Station type icons with specialization
+    const typeIcons = {
+      'mining': '⛏️',
+      'agricultural': '🌾', 
+      'manufacturing': '🏭',
+      'trade_hub': '🏪'
+    };
+    
+    // Food crisis warning
+    const foodColor = this.food === 0 ? '#ff0000' : this.food < 3 ? '#ffaa00' : '#88ff88';
+    const foodIcon = this.food === 0 ? '🚨' : this.food < 3 ? '⚠️' : '';
+    
+    div.innerHTML = `${this.name} ${typeIcons[this.stationType] || ''}<br>
       <span style="font-size: 0.8em; color: #ffaa00;">Pop: ${Math.floor(this.population)} ${happinessIcon}</span><br>
       <span style="font-size: 0.7em; color: #00ffff;">Materials: ${this.materials}</span><br>
       <span style="font-size: 0.7em; color: #ff88ff;">Goods: ${this.producedGoods}</span><br>
+      <span style="font-size: 0.7em; color: ${foodColor};">Food: ${this.food} ${foodIcon}</span><br>
       <span style="font-size: 0.6em; color: #ffff00;">Credits: ${this.credits}</span><br>
       <span style="font-size: 0.6em; color: #888888;">Cargo: ${cargoPercent}%</span>`;
   }
