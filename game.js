@@ -515,13 +515,7 @@ export class SpaceCargoGame {
         this.keys['KeyE_pressed_once'] = true; // Set a flag for one-time press
         this.checkInteractions(); 
       }
-      if (e.code === 'KeyM') { // Example key for mining, can be changed
-        this.attemptMining();
-      } else if (e.code === 'KeyM_released') { // Custom event for key up of M
-        if(this.miningLaser && this.miningLaser.isActive) { // Add null check for miningLaser
-            this.miningLaser.deactivate();
-        }
-      }
+      // REMOVED: Player mining system - conflicts with AI mining
       if (e.code === 'KeyY') {
         this.toggleShipInfoPanel();
       }
@@ -548,13 +542,7 @@ export class SpaceCargoGame {
       if (e.code === 'KeyE') {
         this.keys['KeyE_pressed_once'] = false; // Reset flag on key up
       }
-      if (e.code === 'KeyM') {
-        this.keys[e.code] = false; // Standard key up
-        this.keys['KeyM_released'] = true; // Signal release for mining laser
-         if(this.miningLaser && this.miningLaser.isActive) { // Check if laser exists and is active
-            this.miningLaser.deactivate();
-        }
-      }
+      // REMOVED: Player mining keyup handling - conflicts with AI mining
     });
     document.addEventListener('mousemove', (e) => {
       this.mouseScreenPosition.x = e.clientX;
