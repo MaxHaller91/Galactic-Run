@@ -1093,15 +1093,11 @@ export class Asteroid {
     this.size = size;
     this.mesh = this.createMesh();
     this.mesh.position.set(x, y, 0);
-    this.health = size * 20;
     
-    // FOR AI MINER MINING SYSTEM
-    this.maxOre = 30;        // AI miners look for currentOre > 0
-    this.currentOre = 30;    // Start full of ore for AI miners
-    
-    // FOR PLAYER MINING SYSTEM (existing)
-    this.resourceType = this.getRandomResourceType();
-    this.resourceValue = this.getResourceValue(this.resourceType);
+    // ONLY AI MINER MINING SYSTEM NOW
+    this.maxOre = Math.floor(size * 10); // Bigger asteroids = more ore (5-40 ore range)
+    this.currentOre = this.maxOre;       // Start full of ore for AI miners
+    this.aiDepleted = false;             // Track if depleted by AI miners
     
     this.rotationSpeed = (Math.random() - 0.5) * 0.01;
     this.mesh.rotation.x = Math.random() * Math.PI * 2;
@@ -1122,21 +1118,6 @@ export class Asteroid {
     const color = new THREE.Color(0x888888).lerp(new THREE.Color(0x444444), Math.random());
     const material = new THREE.MeshBasicMaterial({ color: color });
     return new THREE.Mesh(geometry, material);
-  }
-
-  getRandomResourceType() {
-    const types = ['Iron Ore', 'Copper Ore', 'Titanium Ore', 'Rare Crystals'];
-    return types[Math.floor(Math.random() * types.length)];
-  }
-
-  getResourceValue(type) {
-    switch(type) {
-      case 'Iron Ore': return 20;
-      case 'Copper Ore': return 35;
-      case 'Titanium Ore': return 70;
-      case 'Rare Crystals': return 150;
-      default: return 10;
-    }
   }
 
   update(deltaTime) {
@@ -2325,37 +2306,41 @@ export class SimpleMiner {
     this.miningTimer += deltaTime;
     
     if (this.miningTimer >= this.miningTimeNeeded) {
-      // Successfully mined ore
-      this.ore++;
-      this.target.health -= 40; // Damage asteroid significantly
-      this.miningTimer = 0;
-
-      // Log mining
-      if (this.game.eventLogger) {
-        this.game.eventLogger.logEconomic(
-          `Miner extracted ore from asteroid (${this.ore}/${this.maxOre})`,
-          { miner: this.mesh.uuid.slice(0, 8), ore: this.ore }
-        );
-      }
-
-      // Check if asteroid is depleted
-      if (this.target.health <= 0) {
-        // Remove asteroid
-        this.game.scene.remove(this.target.mesh);
-        const asteroidIndex = this.game.entities.asteroids.indexOf(this.target);
-        if (asteroidIndex >= 0) {
-          this.game.entities.asteroids.splice(asteroidIndex, 1);
-        }
-        this.target = null;
-      }
-
-      // Check if cargo is full or should return
-      if (this.ore >= this.maxOre || !this.target) {
-        this.state = 'RETURN';
-        this.target = null;
-      } else {
-        // Continue mining same asteroid
+      // Check if asteroid has ore to mine
+      if (this.target.currentOre > 0) {
+        // Successfully mined ore
+        this.ore++;
+        this.target.currentOre--; // CORRECT - using AI mining system
         this.miningTimer = 0;
+
+        // Log mining
+        if (this.game.eventLogger) {
+          this.game.eventLogger.logEconomic(
+            `Miner extracted ore from asteroid (${this.ore}/${this.maxOre}, asteroid: ${this.target.currentOre}/${this.target.maxOre})`,
+            { miner: this.mesh.uuid.slice(0, 8), ore: this.ore, asteroidOre: this.target.currentOre }
+          );
+        }
+
+        // Check if asteroid is completely depleted of ore
+        if (this.target.currentOre <= 0) {
+          this.target.aiDepleted = true;
+          // Don't remove asteroid, just mark as depleted for AI miners
+          this.target = null;
+        }
+
+        // Check if cargo is full or should return
+        if (this.ore >= this.maxOre || !this.target) {
+          this.state = 'RETURN';
+          this.target = null;
+        } else {
+          // Continue mining same asteroid if it has more ore
+          this.miningTimer = 0;
+        }
+      } else {
+        // Asteroid is depleted of ore for AI miners
+        this.target.aiDepleted = true;
+        this.target = null;
+        this.state = 'SEEK_ASTEROID';
       }
     }
   }
@@ -2382,10 +2367,13 @@ export class SimpleMiner {
     let closestDist = 300; // Max search range
 
     this.game.entities.asteroids.forEach(asteroid => {
-      const dist = this.mesh.position.distanceTo(asteroid.mesh.position);
-      if (dist < closestDist) {
-        closest = asteroid;
-        closestDist = dist;
+      // Only target asteroids that have ore available for AI miners
+      if (asteroid.currentOre > 0) {
+        const dist = this.mesh.position.distanceTo(asteroid.mesh.position);
+        if (dist < closestDist) {
+          closest = asteroid;
+          closestDist = dist;
+        }
       }
     });
 
