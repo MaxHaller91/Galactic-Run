@@ -4,8 +4,8 @@ import { CSS2DRenderer, CSS2DObject } from 'three/renderers/CSS2DRenderer.js';
 import { PlayerShip } from 'ship';
 import { UIManager } from 'ui';
 import { SimpleStationWithTrading, SimplePirate, Projectile, Asteroid, JumpGate, SimplePolice, MiningShip, PirateStation, DistressBeacon, SimpleFriendlyShip, SimpleTrader, SimplePlayerCargo } from 'entities';
-import { COMMODITIES_LIST } from 'constants'; // Import from constants.js
-import { MiningLaser } from 'miningLaser'; // Import the new MiningLaser class
+// REMOVED: Complex COMMODITIES_LIST - using simple materials/goods system
+// REMOVED: MiningLaser - conflicts with AI mining system
 import { Minimap } from 'minimap'; // Import the Minimap class
 import { WeaponSystem, WEAPON_TYPES } from 'weapons'; // Import the new weapon system
 import { EconomyDebugPanel } from 'economyDebug'; // Import the economy debug panel
@@ -17,7 +17,7 @@ export class SpaceCargoGame {
     this.camera = new THREE.OrthographicCamera(-50, 50, 37.5, -37.5, 0.1, 1000);
     this.renderer = new THREE.WebGLRenderer({ antialias: true });
     this.labelRenderer = new CSS2DRenderer();
-    this.COMMODITIES = COMMODITIES_LIST; // Make it accessible on the game instance
+    // REMOVED: Complex COMMODITIES system - using simple materials/goods
     this.clock = new THREE.Clock();
     this.gameState = {
       credits: 1000,
@@ -73,7 +73,7 @@ export class SpaceCargoGame {
       distressBeacons: [], // Add distress beacons array for MVP system
       traders: [] // Add traders array for SimpleTrader ships
     };
-    this.miningLaser = null; 
+    // REMOVED: MiningLaser - conflicts with AI mining system  
     this.minimap = null; // Initialize minimap reference
     this.weaponSystem = null; // Initialize weapon system reference
     this.eventLogger = null; // Initialize event logger reference
@@ -89,7 +89,7 @@ export class SpaceCargoGame {
     SimplePlayerCargo.initializePlayerCargo(this.gameState);
     this.loadZone(this.gameState.currentZoneId);
     this.ui = new UIManager(this.gameState, this.zones, this); 
-    this.miningLaser = new MiningLaser(this.scene);
+    // REMOVED: MiningLaser - conflicts with AI mining system
     this.weaponSystem = new WeaponSystem(this); // Initialize weapon system
     this.economyDebug = new EconomyDebugPanel(this); // Initialize economy debug panel
     this.debugSystem = new DebugSystem(this); // Initialize debug system
