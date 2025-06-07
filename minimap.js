@@ -44,7 +44,8 @@ export class Minimap {
         this.filters = {
             asteroids: true, // Default to true as checkbox is checked initially
             stations: true,
-            pirates: true
+            pirates: true,
+            miners: true // ADD THIS LINE
         };
         this.setupFilterListeners();
     }
@@ -67,6 +68,13 @@ export class Minimap {
         if (pirateFilterCheckbox) {
             pirateFilterCheckbox.addEventListener('change', (event) => {
                 this.filters.pirates = event.target.checked;
+                this.update();
+            });
+        }
+        const minerFilterCheckbox = document.getElementById('filterMinimapMiners');
+        if (minerFilterCheckbox) {
+            minerFilterCheckbox.addEventListener('change', (event) => {
+                this.filters.miners = event.target.checked;
                 this.update();
             });
         }
@@ -105,9 +113,9 @@ export class Minimap {
                 this.drawEntityDot(police, this.dotColors.police, this.dotSizes.police);
             });
         }
-        // Draw mining ships (always draw these for now, or add a filter)
-        if (this.entities.miningShips) {
-            this.entities.miningShips.forEach(miner => {
+        // Draw mining ships (conditionally)
+        if (this.filters.miners && this.entities.miners) {
+            this.entities.miners.forEach(miner => {
                 this.drawEntityDot(miner, this.dotColors.miningShip, this.dotSizes.miningShip);
             });
         }
