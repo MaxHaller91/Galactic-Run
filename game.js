@@ -223,14 +223,19 @@ export class SpaceCargoGame {
         this.playerShip.mesh.position.set(0, 0, 0);
         // Populate entities for the current zone with expanded scale
         if (zoneId === 'alpha-sector') {
-            // Stations spread much further apart for epic scale
+            // BALANCED STATION ECONOMY - Ensure proper interdependence
             const stationPositions = [
-                { x: -400, y: 300, name: 'Alpha Station Prime' },
-                { x: 450, y: 350, name: 'Trade Hub Alpha' },
-                { x: -200, y: -400, name: 'Commerce Central' }
+                { x: -400, y: 300, name: 'Alpha Station Prime', type: 'manufacturing' },    // Core manufacturing
+                { x: 450, y: 350, name: 'Trade Hub Alpha', type: 'trade_hub' },             // Distribution center
+                { x: -200, y: -400, name: 'Commerce Central', type: 'agricultural' },       // Food production
+                { x: -600, y: -200, name: 'Mining Complex Beta', type: 'mining' },          // Materials extraction
+                { x: 300, y: -300, name: 'Industrial Station', type: 'manufacturing' },     // Additional manufacturing
+                { x: 600, y: 200, name: 'Agri-Station Gamma', type: 'agricultural' }       // Additional food
             ];
             stationPositions.forEach(pos => {
                 const station = new SimpleStationWithTrading(pos.x, pos.y, pos.name, CSS2DObject);
+                station.stationType = pos.type; // OVERRIDE random assignment with specific type
+                station.productionModifiers = station.getProductionModifiers(); // Recalculate modifiers
                 station.game = this; // Add game reference for event logging
                 this.entities.stations.push(station);
                 this.scene.add(station.mesh);
@@ -250,13 +255,18 @@ export class SpaceCargoGame {
             this.entities.jumpGates.push(gateToOuterWilds);
             this.scene.add(gateToOuterWilds.mesh);
         } else if (zoneId === 'outer-wilds') {
-            // Fewer, more spread out stations in the frontier
+            // FRONTIER ECONOMY - More mining-focused but still interdependent
             const stationPositions = [
-                { x: 0, y: 0, name: 'Prospector Deep' },
-                { x: -600, y: 400, name: 'Mining Outpost Zeta' }
+                { x: 0, y: 0, name: 'Prospector Deep', type: 'mining' },                    // Main mining operation
+                { x: -600, y: 400, name: 'Mining Outpost Zeta', type: 'mining' },          // Additional mining
+                { x: 400, y: -300, name: 'Frontier Agri-Station', type: 'agricultural' },   // Essential food production
+                { x: -300, y: -600, name: 'Industrial Outpost', type: 'manufacturing' },    // Goods production
+                { x: 700, y: 300, name: 'Trade Post Omega', type: 'trade_hub' }             // Distribution center
             ];
             stationPositions.forEach(pos => {
                 const station = new SimpleStationWithTrading(pos.x, pos.y, pos.name, CSS2DObject);
+                station.stationType = pos.type; // OVERRIDE random assignment with specific type
+                station.productionModifiers = station.getProductionModifiers(); // Recalculate modifiers
                 station.game = this; // Add game reference for event logging
                 this.entities.stations.push(station);
                 this.scene.add(station.mesh);
