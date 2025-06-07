@@ -1,246 +1,7 @@
 import * as THREE from 'three';
-import { COMMODITIES_LIST } from 'constants';
 
-export class SpaceStation {
-  constructor(x, y, name, CSS2DObjectConstructor) {
-    this.name = name;
-    const factions = ['Federated Commerce Guild', 'Outer Rim Prospectors'];
-    this.faction = factions[Math.floor(Math.random() * factions.length)];
-    this.factionColors = {
-      'Federated Commerce Guild': new THREE.Color(0x0088ff),
-      'Outer Rim Prospectors': new THREE.Color(0xffaa00),
-      'Pirates': new THREE.Color(0xff0000)
-    };
-    
-    this.population = 800 + Math.floor(Math.random() * 1200);
-    this.maxPopulation = this.population * 1.5;
-    this.foodStock = 400 + Math.floor(Math.random() * 200);
-    this.waterStock = 250 + Math.floor(Math.random() * 150);
-    this.happiness = 60 + Math.floor(Math.random() * 30);
-    this.lastUpdateTime = Date.now();
-    this.updateInterval = 30000;
-    this.consumptionRate = { food: 0.1, water: 0.05 };
-    this.productivityMultiplier = 1.0;
-    this.controllingFaction = this.faction;
-    this.stationHealth = 'healthy';
-    
-    this.tier = Math.max(1, Math.floor(this.population / 1000));
-    this.maxCargo = 100 + (this.tier * 100);
-    this.cargoHold = new Map();
-    this.credits = 2000 + Math.floor(Math.random() * 3000);
-    
-    const stationTypes = ['mining', 'agricultural', 'industrial', 'commercial', 'research'];
-    this.stationType = stationTypes[Math.floor(Math.random() * stationTypes.length)];
-    
-    this.defenseLevel = this.tier >= 3 ? Math.min(this.tier - 2, 3) : 0;
-    this.defenseRange = this.defenseLevel > 0 ? 40 + (this.defenseLevel * 20) : 0;
-    this.defenseDamage = this.defenseLevel > 0 ? 15 + (this.defenseLevel * 10) : 0;
-    this.defenseFireRate = this.defenseLevel > 0 ? 0.5 - (this.defenseLevel * 0.1) : 0;
-    this.lastDefenseShot = 0;
-    
-    // Add missing properties that game.js expects
-    this.constructionQueue = [];
-    this.ownedShips = [];
-    this.governor = null; // Will be initialized later if needed
-    
-    const availableForProduction = COMMODITIES_LIST.filter(c => c.type === 'industrial' || c.type === 'consumer' || c.type === 'tech');
-    this.productionFocus = availableForProduction[Math.floor(Math.random() * availableForProduction.length)].name;
-    const availableForConsumption = COMMODITIES_LIST.filter(c => c.name !== this.productionFocus);
-    this.consumptionFocus = availableForConsumption[Math.floor(Math.random() * availableForConsumption.length)].name;
-    
-    this.mesh = this.createMesh();
-    this.mesh.position.set(x, y, 0);
-    this.initializeCargo();
-    this.inventory = {};
-    this.goods = this.initializeEconomy();
-    this.label = this.createLabel(CSS2DObjectConstructor);
-    this.mesh.add(this.label);
-  }
-
-  createMesh() {
-    const group = new THREE.Group();
-    const coreGeometry = new THREE.CylinderGeometry(3, 3, 1, 8);
-    const coreMaterial = new THREE.MeshBasicMaterial({ color: 0x666666 });
-    const core = new THREE.Mesh(coreGeometry, coreMaterial);
-    group.add(core);
-    
-    const ringGeometry = new THREE.TorusGeometry(4, 0.5, 8, 16);
-    const ringMaterial = new THREE.MeshBasicMaterial({ color: 0x888888 });
-    const ring = new THREE.Mesh(ringGeometry, ringMaterial);
-    ring.rotation.x = Math.PI / 2;
-    group.add(ring);
-    
-    const lightGeometry = new THREE.SphereGeometry(0.2, 6, 6);
-    const factionColor = this.factionColors[this.faction] || new THREE.Color(0x00ff88);
-    const lightMaterial = new THREE.MeshBasicMaterial({ color: factionColor });
-    for (let i = 0; i < 8; i++) {
-      const light = new THREE.Mesh(lightGeometry, lightMaterial);
-      const angle = (i / 8) * Math.PI * 2;
-      light.position.set(Math.cos(angle) * 4, Math.sin(angle) * 4, 0.5);
-      group.add(light);
-    }
-    return group;
-  }
-
-  createLabel(CSS2DObjectConstructor) {
-    const div = document.createElement('div');
-    div.className = 'station-label';
-    const factionColorHex = this.factionColors[this.faction] ? `#${this.factionColors[this.faction].getHexString()}` : '#00ff88';
-    const stationTypeColors = {
-      'mining': '#ffaa00', 'agricultural': '#00ff00', 'industrial': '#ff6600',
-      'commercial': '#00ffff', 'research': '#aa00ff'
-    };
-    const typeColor = stationTypeColors[this.stationType] || '#ffffff';
-    
-    div.innerHTML = `${this.name}<br><span style="font-size: 0.7em; color: ${typeColor};">${this.stationType.toUpperCase()} STATION</span><br><span style="font-size: 0.8em; color: ${factionColorHex};">${this.faction}</span><br><span style="font-size: 0.6em; color: #888888;">Tier ${this.tier} | ${this.credits}cr</span>`;
-    div.style.fontFamily = "'Lucida Console', 'Courier New', monospace";
-    div.style.color = '#00ff00';
-    div.style.fontSize = '13px';
-    div.style.textAlign = 'center';
-    div.style.textShadow = '1px 1px 1px rgba(0,0,0,0.7)';
-    div.style.backgroundColor = 'rgba(0, 20, 0, 0.5)';
-    div.style.padding = '2px 4px';
-    div.style.border = '1px solid rgba(0,255,0,0.3)';
-    div.style.borderRadius = '2px';
-    
-    const label = new CSS2DObjectConstructor(div);
-    label.position.set(0, 5.5, 0);
-    return label;
-  }
-
-  initializeEconomy() {
-    const goodsForSale = [];
-    COMMODITIES_LIST.forEach(commodity => {
-      let initialQuantity, baseStationSellPrice, baseStationBuyPrice;
-      const P_base = commodity.basePrice;
-      
-      if (commodity.name === this.productionFocus) {
-        initialQuantity = 200 + Math.floor(Math.random() * 301);
-        baseStationSellPrice = Math.floor(P_base * (0.8 + Math.random() * 0.15));
-        baseStationBuyPrice = Math.floor(P_base * (0.5 + Math.random() * 0.2));
-      } else if (commodity.name === this.consumptionFocus) {
-        initialQuantity = 0 + Math.floor(Math.random() * 51);
-        baseStationSellPrice = Math.floor(P_base * (1.3 + Math.random() * 0.3));
-        baseStationBuyPrice = Math.floor(P_base * (1.1 + Math.random() * 0.15));
-      } else {
-        initialQuantity = 0 + Math.floor(Math.random() * 21);
-        baseStationSellPrice = Math.floor(P_base * (1.0 + Math.random() * 0.2));
-        baseStationBuyPrice = Math.floor(P_base * (0.8 + Math.random() * 0.15));
-      }
-      
-      if (baseStationBuyPrice >= baseStationSellPrice) {
-        baseStationBuyPrice = Math.floor(baseStationSellPrice * 0.9);
-      }
-      baseStationSellPrice = Math.max(1, baseStationSellPrice);
-      baseStationBuyPrice = Math.max(1, baseStationBuyPrice);
-      this.inventory[commodity.name] = initialQuantity;
-      
-      if (initialQuantity > 0) {
-        goodsForSale.push({
-          name: commodity.name, type: commodity.type,
-          stationBaseSellPrice: baseStationSellPrice,
-          stationBaseBuyPrice: baseStationBuyPrice, basePrice: P_base,
-        });
-      }
-    });
-    return goodsForSale;
-  }
-
-  buyCommodity(commodityName, quantity) {
-    if (this.inventory[commodityName] === undefined || this.inventory[commodityName] < quantity) return false;
-    this.inventory[commodityName] -= quantity;
-    return true;
-  }
-
-  sellCommodity(commodityName, quantity) {
-    if (this.inventory[commodityName] === undefined) {
-      const commodityDetails = COMMODITIES_LIST.find(c => c.name === commodityName);
-      if (!commodityDetails) return false;
-      this.inventory[commodityName] = 0;
-    }
-    this.inventory[commodityName] += quantity;
-    return true;
-  }
-
-  initializeCargo() {
-    const cargoByType = {
-      mining: { 'Iron Ore': 150, 'Copper Ore': 100, 'Food Rations': 100, 'Water': 100, 'Basic Tools': 50 },
-      agricultural: { 'Food Rations': 300, 'Seeds': 100, 'Water': 200, 'Basic Tools': 50, 'Fertilizer': 75 },
-      industrial: { 'Manufactured Goods': 200, 'Iron Ore': 150, 'Electronics': 100, 'Basic Tools': 100, 'Energy Cells': 50 },
-      commercial: { 'Food Rations': 100, 'Water': 100, 'Electronics': 100, 'Manufactured Goods': 100, 'Luxury Items': 50 },
-      research: { 'Advanced Tech': 50, 'Rare Crystals': 75, 'Electronics': 150, 'Data Cores': 100, 'Research Equipment': 25 }
-    };
-
-    const startingCargo = cargoByType[this.stationType] || cargoByType.commercial;
-    for (const [commodity, quantity] of Object.entries(startingCargo)) {
-      this.cargoHold.set(commodity, quantity);
-    }
-  }
-
-  spawnEmergencyPolice(game) {
-    if (this.credits < 1000) return;
-    this.credits -= 1000;
-    
-    const angle = Math.random() * Math.PI * 2;
-    const distance = 15 + Math.random() * 10;
-    const x = this.mesh.position.x + Math.cos(angle) * distance;
-    const y = this.mesh.position.y + Math.sin(angle) * distance;
-    
-    const police = new SimplePolice(x, y, game.entities.stations, this.controllingFaction);
-    game.entities.police.push(police);
-    game.scene.add(police.mesh);
-    
-    if (game.ui) {
-      game.ui.showMessage(`${this.name} deployed emergency police!`, 'system-neutral');
-    }
-  }
-
-  // Essential methods that game.js expects
-  updateEconomy(currentTime, game) {
-    // Simple placeholder - just update credits occasionally
-    if (currentTime - this.lastUpdateTime > this.updateInterval) {
-      this.credits += Math.floor(Math.random() * 100);
-      this.lastUpdateTime = currentTime;
-    }
-  }
-
-  updateTier() {
-    // Simple tier calculation
-    this.tier = Math.max(1, Math.floor(this.population / 1000));
-  }
-
-  defendAgainstPirates(game, deltaTime) {
-    // Simple defense - stations can shoot at nearby pirates
-    if (this.defenseLevel <= 0) return;
-    
-    const nearbyPirates = game.entities.pirates.filter(pirate => {
-      const distance = pirate.mesh.position.distanceTo(this.mesh.position);
-      return distance < this.defenseRange;
-    });
-
-    if (nearbyPirates.length > 0 && Date.now() - this.lastDefenseShot > (this.defenseFireRate * 1000)) {
-      const target = nearbyPirates[0];
-      const dx = target.mesh.position.x - this.mesh.position.x;
-      const dy = target.mesh.position.y - this.mesh.position.y;
-      const angle = Math.atan2(dy, dx);
-
-      const projectile = new Projectile(
-        this.mesh.position.x,
-        this.mesh.position.y,
-        angle,
-        false,
-        1,
-        true
-      );
-      projectile.damage = this.defenseDamage;
-      projectile.isStationDefense = true;
-
-      game.entities.projectiles.push(projectile);
-      game.scene.add(projectile.mesh);
-      this.lastDefenseShot = Date.now();
-    }
-  }
-}
+// REMOVED: Massive unused SpaceStation class (200+ lines of dead code)
+// REMOVED: Complex COMMODITIES_LIST import - using simple materials/goods system
 
 // 1. SIMPLE DISTRESS BEACON ENTITY
 export class DistressBeacon {
@@ -1325,283 +1086,7 @@ export class PirateStation {
   }
 }
 
-// SIMPLE STATION ECONOMY - Just Materials & Production
-
-export class SimpleStation {
-  constructor(x, y, name, CSS2DObjectConstructor) {
-    this.name = name;
-    this.mesh = this.createMesh();
-    this.mesh.position.set(x, y, 0);
-    
-    // SIMPLE CARGO SYSTEM
-    this.materials = 5 + Math.floor(Math.random() * 15); // 5-20 materials to start
-    this.producedGoods = 2 + Math.floor(Math.random() * 8); // 2-10 produced goods to start
-    this.maxCargo = 50; // Can hold up to 50 total items
-    
-    // POPULATION & CONSUMPTION
-    this.population = 800 + Math.floor(Math.random() * 1200);
-    this.consumptionRate = this.population / 1000; // 1 good per 1000 people per day
-    
-    // PRODUCTION SYSTEM
-    this.productionRate = 1.0; // Can produce 1 good per 2 materials (when conditions are met)
-    this.lastProductionTime = Date.now();
-    this.productionInterval = 5000; // Try to produce every 5 seconds
-    
-    // PIRATE DETECTION
-    this.pirateDetectionRange = 100; // Can see pirates within 100 units
-    this.lastDistressCall = 0;
-    this.distressCallCooldown = 30000; // Only call for help every 30 seconds
-    
-    // VISUAL
-    this.label = this.createLabel(CSS2DObjectConstructor);
-    this.mesh.add(this.label);
-  }
-
-  createMesh() {
-    const group = new THREE.Group();
-    const coreGeometry = new THREE.CylinderGeometry(3, 3, 1, 8);
-    const coreMaterial = new THREE.MeshBasicMaterial({ color: 0x666666 });
-    const core = new THREE.Mesh(coreGeometry, coreMaterial);
-    group.add(core);
-    
-    const ringGeometry = new THREE.TorusGeometry(4, 0.5, 8, 16);
-    const ringMaterial = new THREE.MeshBasicMaterial({ color: 0x888888 });
-    const ring = new THREE.Mesh(ringGeometry, ringMaterial);
-    ring.rotation.x = Math.PI / 2;
-    group.add(ring);
-    
-    return group;
-  }
-
-  createLabel(CSS2DObjectConstructor) {
-    const div = document.createElement('div');
-    div.className = 'station-label';
-    this.updateLabelContent(div);
-    
-    div.style.fontFamily = "'Lucida Console', 'Courier New', monospace";
-    div.style.color = '#00ff00';
-    div.style.fontSize = '13px';
-    div.style.textAlign = 'center';
-    div.style.textShadow = '1px 1px 1px rgba(0,0,0,0.7)';
-    div.style.backgroundColor = 'rgba(0, 20, 0, 0.5)';
-    div.style.padding = '2px 4px';
-    div.style.border = '1px solid rgba(0,255,0,0.3)';
-    div.style.borderRadius = '2px';
-    
-    const label = new CSS2DObjectConstructor(div);
-    label.position.set(0, 5.5, 0);
-    return label;
-  }
-
-  updateLabelContent(div) {
-    const totalCargo = this.materials + this.producedGoods;
-    const cargoPercent = Math.floor((totalCargo / this.maxCargo) * 100);
-    
-    div.innerHTML = `${this.name}<br>
-      <span style="font-size: 0.8em; color: #ffaa00;">Pop: ${Math.floor(this.population)}</span><br>
-      <span style="font-size: 0.7em; color: #00ffff;">Materials: ${this.materials}</span><br>
-      <span style="font-size: 0.7em; color: #ff88ff;">Goods: ${this.producedGoods}</span><br>
-      <span style="font-size: 0.6em; color: #888888;">Cargo: ${cargoPercent}%</span>`;
-  }
-
-  update(deltaTime, game) {
-    const currentTime = Date.now();
-    
-    // 1. CHECK FOR PIRATES AND CALL FOR HELP
-    this.checkForPiratesAndCallHelp(game, currentTime);
-    
-    // 2. CONSUME GOODS (population needs)
-    this.consumeGoods(deltaTime);
-    
-    // 3. PRODUCE GOODS (if we have materials)
-    this.produceGoods(currentTime);
-    
-    // 4. UPDATE VISUAL LABEL
-    this.updateLabelContent(this.label.element);
-  }
-
-  checkForPiratesAndCallHelp(game, currentTime) {
-    // Only check if we haven't called for help recently
-    if (currentTime - this.lastDistressCall < this.distressCallCooldown) return;
-    
-    // Look for pirates within detection range
-    const nearbyPirates = game.entities.pirates.filter(pirate => {
-      const distance = pirate.mesh.position.distanceTo(this.mesh.position);
-      return distance < this.pirateDetectionRange;
-    });
-    
-    if (nearbyPirates.length > 0) {
-      this.callForPoliceHelp(game);
-      this.lastDistressCall = currentTime;
-    }
-  }
-
-  callForPoliceHelp(game) {
-    // Create distress beacon at station location
-    const beacon = new DistressBeacon(this.mesh.position.x, this.mesh.position.y);
-    beacon.isStationDistress = true;
-    
-    if (!game.entities.distressBeacons) {
-      game.entities.distressBeacons = [];
-    }
-    game.entities.distressBeacons.push(beacon);
-    game.scene.add(beacon.mesh);
-    
-    if (game.ui) {
-      game.ui.showMessage(`${this.name}: Pirates detected! Police assistance requested!`, 'warning');
-    }
-  }
-
-  consumeGoods(deltaTime) {
-    // Population consumes 1 produced good per 1000 people per day
-    // Convert to per-second: 1 good per 1000 people per 180 seconds (3 minutes = 1 game day)
-    const consumptionPerSecond = this.consumptionRate / 180; // Game time, not real time!
-    const actualConsumption = consumptionPerSecond * deltaTime;
-    
-    // Accumulate fractional consumption
-    if (!this.consumptionAccumulator) this.consumptionAccumulator = 0;
-    this.consumptionAccumulator += actualConsumption;
-    
-    // When we've accumulated enough for a whole good, consume it
-    if (this.consumptionAccumulator >= 1.0 && this.producedGoods > 0) {
-      this.producedGoods--;
-      this.consumptionAccumulator -= 1.0;
-    }
-    
-    // POPULATION DECLINE when no goods available - MUCH FASTER!
-    if (this.producedGoods === 0 && this.consumptionAccumulator >= 1.0) {
-      // Lose multiple people when starving - dramatic population collapse!
-      const populationLoss = Math.min(10, Math.floor(this.population * 0.01)); // Lose 1% of population or 10 people, whichever is smaller
-      this.population -= populationLoss;
-      this.consumptionAccumulator -= 1.0; // Still consume the "demand"
-      console.log(`${this.name} population declining: ${this.population} (-${populationLoss} people - STARVATION!)`);
-      
-      // Also reduce consumption rate since we have fewer people
-      this.consumptionRate = Math.max(0.1, this.population / 1000); // Don't let it go below 0.1
-      
-      // Station in crisis - lose credits too from economic collapse
-      this.credits = Math.max(0, this.credits - 50);
-    }
-  }
-
-  produceGoods(currentTime) {
-    // Only try to produce every few seconds
-    if (currentTime - this.lastProductionTime < this.productionInterval) return;
-    
-    // Need 2 materials to produce 1 good
-    if (this.materials >= 2) {
-      // Check if we have cargo space
-      const totalCargo = this.materials + this.producedGoods;
-      if (totalCargo < this.maxCargo) {
-        // Produce!
-        this.materials -= 2;
-        this.producedGoods += 1;
-        this.lastProductionTime = currentTime;
-        
-        // Visual feedback for production
-        this.showProductionEffect();
-      }
-    }
-  }
-
-  showProductionEffect() {
-    // Simple visual effect - change station color briefly
-    const core = this.mesh.children[0]; // First child is the core
-    const originalColor = core.material.color.clone();
-    
-    // Flash green for production
-    core.material.color.setHex(0x00ff00);
-    
-    setTimeout(() => {
-      core.material.color.copy(originalColor);
-    }, 500);
-  }
-
-  // TRADE METHODS - For player interaction
-  canSellMaterials(quantity) {
-    return this.materials >= quantity;
-  }
-
-  canBuyMaterials(quantity) {
-    const totalCargo = this.materials + this.producedGoods;
-    return (totalCargo + quantity) <= this.maxCargo;
-  }
-
-  canSellGoods(quantity) {
-    return this.producedGoods >= quantity;
-  }
-
-  canBuyGoods(quantity) {
-    const totalCargo = this.materials + this.producedGoods;
-    return (totalCargo + quantity) <= this.maxCargo;
-  }
-
-  sellMaterials(quantity) {
-    if (this.canSellMaterials(quantity)) {
-      this.materials -= quantity;
-      return true;
-    }
-    return false;
-  }
-
-  buyMaterials(quantity) {
-    if (this.canBuyMaterials(quantity)) {
-      this.materials += quantity;
-      return true;
-    }
-    return false;
-  }
-
-  sellGoods(quantity) {
-    if (this.canSellGoods(quantity)) {
-      this.producedGoods -= quantity;
-      return true;
-    }
-    return false;
-  }
-
-  buyGoods(quantity) {
-    if (this.canBuyGoods(quantity)) {
-      this.producedGoods += quantity;
-      return true;
-    }
-    return false;
-  }
-
-  // SIMPLE PRICING - Materials cheaper, goods more expensive
-  getMaterialPrice() {
-    // Base price affected by scarcity
-    const scarcityMultiplier = this.materials < 5 ? 1.5 : (this.materials > 20 ? 0.8 : 1.0);
-    return Math.floor(50 * scarcityMultiplier);
-  }
-
-  getGoodsPrice() {
-    // Base price affected by scarcity  
-    const scarcityMultiplier = this.producedGoods < 3 ? 1.8 : (this.producedGoods > 15 ? 0.7 : 1.0);
-    return Math.floor(120 * scarcityMultiplier);
-  }
-
-  // GET STATUS FOR UI/DEBUG
-  getEconomicStatus() {
-    const totalCargo = this.materials + this.producedGoods;
-    const cargoFull = totalCargo >= this.maxCargo;
-    const canProduce = this.materials >= 2 && !cargoFull;
-    const needsGoods = this.producedGoods < 5;
-    const needsMaterials = this.materials < 10;
-    
-    return {
-      materials: this.materials,
-      goods: this.producedGoods,
-      totalCargo: totalCargo,
-      cargoFull: cargoFull,
-      canProduce: canProduce,
-      needsGoods: needsGoods,
-      needsMaterials: needsMaterials,
-      population: Math.floor(this.population),
-      consumptionRate: this.consumptionRate
-    };
-  }
-}
+// REMOVED: SimpleStation class - functionality moved into SimpleStationWithTrading
 
 // SIMPLE ZONE ECONOMY BALANCER
 export class SimpleZoneEconomy {
@@ -1970,12 +1455,28 @@ export class SimpleTrader {
   }
 }
 
-// SIMPLE STATION WITH PLAYER TRADING SUPPORT
-export class SimpleStationWithTrading extends SimpleStation {
+// UNIFIED STATION WITH TRADING AND ECONOMY - Only station class needed!
+export class SimpleStationWithTrading {
   constructor(x, y, name, CSS2DObjectConstructor) {
-    super(x, y, name, CSS2DObjectConstructor);
+    this.name = name;
+    this.mesh = this.createMesh();
+    this.mesh.position.set(x, y, 0);
     
-    // ADD CREDITS FOR TRADING
+    // SIMPLE CARGO SYSTEM
+    this.materials = 5 + Math.floor(Math.random() * 15); // 5-20 materials to start
+    this.producedGoods = 2 + Math.floor(Math.random() * 8); // 2-10 produced goods to start
+    this.maxCargo = 50; // Can hold up to 50 total items
+    
+    // POPULATION & CONSUMPTION
+    this.population = 800 + Math.floor(Math.random() * 1200);
+    this.consumptionRate = this.population / 1000; // 1 good per 1000 people per day
+    
+    // PRODUCTION SYSTEM
+    this.productionRate = 1.0; // Can produce 1 good per 2 materials (when conditions are met)
+    this.lastProductionTime = Date.now();
+    this.productionInterval = 5000; // Try to produce every 5 seconds
+    
+    // CREDITS FOR TRADING
     this.credits = 1000 + Math.floor(Math.random() * 2000);
     
     // MINER SPAWNING SYSTEM
@@ -1984,19 +1485,256 @@ export class SimpleStationWithTrading extends SimpleStation {
     this.minerCost = { goods: 2, credits: 300 }; // Cheaper than traders
     this.lastMinerCheck = 0;
     this.minerCheckInterval = 10000; // Check every 10 seconds
+    
+    // PIRATE DETECTION
+    this.pirateDetectionRange = 100; // Can see pirates within 100 units
+    this.lastDistressCall = 0;
+    this.distressCallCooldown = 30000; // Only call for help every 30 seconds
+    
+    // VISUAL
+    this.label = this.createLabel(CSS2DObjectConstructor);
+    this.mesh.add(this.label);
   }
 
-  // Override update to add debug logging and miner spawning
+  createMesh() {
+    const group = new THREE.Group();
+    const coreGeometry = new THREE.CylinderGeometry(3, 3, 1, 8);
+    const coreMaterial = new THREE.MeshBasicMaterial({ color: 0x666666 });
+    const core = new THREE.Mesh(coreGeometry, coreMaterial);
+    group.add(core);
+    
+    const ringGeometry = new THREE.TorusGeometry(4, 0.5, 8, 16);
+    const ringMaterial = new THREE.MeshBasicMaterial({ color: 0x888888 });
+    const ring = new THREE.Mesh(ringGeometry, ringMaterial);
+    ring.rotation.x = Math.PI / 2;
+    group.add(ring);
+    
+    return group;
+  }
+
+  createLabel(CSS2DObjectConstructor) {
+    const div = document.createElement('div');
+    div.className = 'station-label';
+    this.updateLabelContent(div);
+    
+    div.style.fontFamily = "'Lucida Console', 'Courier New', monospace";
+    div.style.color = '#00ff00';
+    div.style.fontSize = '13px';
+    div.style.textAlign = 'center';
+    div.style.textShadow = '1px 1px 1px rgba(0,0,0,0.7)';
+    div.style.backgroundColor = 'rgba(0, 20, 0, 0.5)';
+    div.style.padding = '2px 4px';
+    div.style.border = '1px solid rgba(0,255,0,0.3)';
+    div.style.borderRadius = '2px';
+    
+    const label = new CSS2DObjectConstructor(div);
+    label.position.set(0, 5.5, 0);
+    return label;
+  }
+
   update(deltaTime, game) {
     console.log(`${this.name}: update called, materials=${this.materials}, goods=${this.producedGoods}, credits=${this.credits}`);
     
-    // Call parent update method
-    super.update(deltaTime, game);
+    const currentTime = Date.now();
     
-    // Check for miner spawning
-    this.checkMinerSpawning(Date.now(), game);
+    // 1. CHECK FOR PIRATES AND CALL FOR HELP
+    this.checkForPiratesAndCallHelp(game, currentTime);
+    
+    // 2. CONSUME GOODS (population needs)
+    this.consumeGoods(deltaTime);
+    
+    // 3. PRODUCE GOODS (if we have materials)
+    this.produceGoods(currentTime);
+    
+    // 4. CHECK FOR MINER SPAWNING
+    this.checkMinerSpawning(currentTime, game);
+    
+    // 5. UPDATE VISUAL LABEL
+    this.updateLabelContent(this.label.element);
     
     console.log(`${this.name}: after update, materials=${this.materials}, goods=${this.producedGoods}`);
+  }
+
+  checkForPiratesAndCallHelp(game, currentTime) {
+    // Only check if we haven't called for help recently
+    if (currentTime - this.lastDistressCall < this.distressCallCooldown) return;
+    
+    // Look for pirates within detection range
+    const nearbyPirates = game.entities.pirates.filter(pirate => {
+      const distance = pirate.mesh.position.distanceTo(this.mesh.position);
+      return distance < this.pirateDetectionRange;
+    });
+    
+    if (nearbyPirates.length > 0) {
+      this.callForPoliceHelp(game);
+      this.lastDistressCall = currentTime;
+    }
+  }
+
+  callForPoliceHelp(game) {
+    // Create distress beacon at station location
+    const beacon = new DistressBeacon(this.mesh.position.x, this.mesh.position.y);
+    beacon.isStationDistress = true;
+    
+    if (!game.entities.distressBeacons) {
+      game.entities.distressBeacons = [];
+    }
+    game.entities.distressBeacons.push(beacon);
+    game.scene.add(beacon.mesh);
+    
+    if (game.ui) {
+      game.ui.showMessage(`${this.name}: Pirates detected! Police assistance requested!`, 'warning');
+    }
+  }
+
+  consumeGoods(deltaTime) {
+    // Population consumes 1 produced good per 1000 people per day
+    // Convert to per-second: 1 good per 1000 people per 180 seconds (3 minutes = 1 game day)
+    const consumptionPerSecond = this.consumptionRate / 180; // Game time, not real time!
+    const actualConsumption = consumptionPerSecond * deltaTime;
+    
+    // Accumulate fractional consumption
+    if (!this.consumptionAccumulator) this.consumptionAccumulator = 0;
+    this.consumptionAccumulator += actualConsumption;
+    
+    // When we've accumulated enough for a whole good, consume it
+    if (this.consumptionAccumulator >= 1.0 && this.producedGoods > 0) {
+      this.producedGoods--;
+      this.consumptionAccumulator -= 1.0;
+    }
+    
+    // POPULATION DECLINE when no goods available - MUCH FASTER!
+    if (this.producedGoods === 0 && this.consumptionAccumulator >= 1.0) {
+      // Lose multiple people when starving - dramatic population collapse!
+      const populationLoss = Math.min(10, Math.floor(this.population * 0.01)); // Lose 1% of population or 10 people, whichever is smaller
+      this.population -= populationLoss;
+      this.consumptionAccumulator -= 1.0; // Still consume the "demand"
+      console.log(`${this.name} population declining: ${this.population} (-${populationLoss} people - STARVATION!)`);
+      
+      // Also reduce consumption rate since we have fewer people
+      this.consumptionRate = Math.max(0.1, this.population / 1000); // Don't let it go below 0.1
+      
+      // Station in crisis - lose credits too from economic collapse
+      this.credits = Math.max(0, this.credits - 50);
+    }
+  }
+
+  produceGoods(currentTime) {
+    // Only try to produce every few seconds
+    if (currentTime - this.lastProductionTime < this.productionInterval) return;
+    
+    // Need 2 materials to produce 1 good
+    if (this.materials >= 2) {
+      // Check if we have cargo space
+      const totalCargo = this.materials + this.producedGoods;
+      if (totalCargo < this.maxCargo) {
+        // Produce!
+        this.materials -= 2;
+        this.producedGoods += 1;
+        this.lastProductionTime = currentTime;
+        
+        // Visual feedback for production
+        this.showProductionEffect();
+      }
+    }
+  }
+
+  showProductionEffect() {
+    // Simple visual effect - change station color briefly
+    const core = this.mesh.children[0]; // First child is the core
+    const originalColor = core.material.color.clone();
+    
+    // Flash green for production
+    core.material.color.setHex(0x00ff00);
+    
+    setTimeout(() => {
+      core.material.color.copy(originalColor);
+    }, 500);
+  }
+
+  // TRADE METHODS - For AI and player interaction
+  canSellMaterials(quantity) {
+    return this.materials >= quantity;
+  }
+
+  canBuyMaterials(quantity) {
+    const totalCargo = this.materials + this.producedGoods;
+    return (totalCargo + quantity) <= this.maxCargo;
+  }
+
+  canSellGoods(quantity) {
+    return this.producedGoods >= quantity;
+  }
+
+  canBuyGoods(quantity) {
+    const totalCargo = this.materials + this.producedGoods;
+    return (totalCargo + quantity) <= this.maxCargo;
+  }
+
+  sellMaterials(quantity) {
+    if (this.canSellMaterials(quantity)) {
+      this.materials -= quantity;
+      return true;
+    }
+    return false;
+  }
+
+  buyMaterials(quantity) {
+    if (this.canBuyMaterials(quantity)) {
+      this.materials += quantity;
+      return true;
+    }
+    return false;
+  }
+
+  sellGoods(quantity) {
+    if (this.canSellGoods(quantity)) {
+      this.producedGoods -= quantity;
+      return true;
+    }
+    return false;
+  }
+
+  buyGoods(quantity) {
+    if (this.canBuyGoods(quantity)) {
+      this.producedGoods += quantity;
+      return true;
+    }
+    return false;
+  }
+
+  // SIMPLE PRICING - Materials cheaper, goods more expensive
+  getMaterialPrice() {
+    // Base price affected by scarcity
+    const scarcityMultiplier = this.materials < 5 ? 1.5 : (this.materials > 20 ? 0.8 : 1.0);
+    return Math.floor(50 * scarcityMultiplier);
+  }
+
+  getGoodsPrice() {
+    // Base price affected by scarcity  
+    const scarcityMultiplier = this.producedGoods < 3 ? 1.8 : (this.producedGoods > 15 ? 0.7 : 1.0);
+    return Math.floor(120 * scarcityMultiplier);
+  }
+
+  // GET STATUS FOR UI/DEBUG
+  getEconomicStatus() {
+    const totalCargo = this.materials + this.producedGoods;
+    const cargoFull = totalCargo >= this.maxCargo;
+    const canProduce = this.materials >= 2 && !cargoFull;
+    const needsGoods = this.producedGoods < 5;
+    const needsMaterials = this.materials < 10;
+    
+    return {
+      materials: this.materials,
+      goods: this.producedGoods,
+      totalCargo: totalCargo,
+      cargoFull: cargoFull,
+      canProduce: canProduce,
+      needsGoods: needsGoods,
+      needsMaterials: needsMaterials,
+      population: Math.floor(this.population),
+      consumptionRate: this.consumptionRate
+    };
   }
 
   checkMinerSpawning(currentTime, game) {
