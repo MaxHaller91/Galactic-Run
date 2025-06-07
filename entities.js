@@ -55,7 +55,9 @@ export class SimplePirate {
     this.lastShotTime = 0;
     this.fireRate = 800;
     this.attackRange = 60;
-    this.detectionRange = 100;
+    this.detectionRange = 200; // CHANGED: Increased from 100 to 200
+    this.pursuitRange = 400; // How far pirates will chase
+    this.mapPatrolSize = 2000; // Patrol full map
     this.optimalRange = 45; // Stay this far from target
   }
 
@@ -240,14 +242,14 @@ export class SimplePirate {
   }
 
   patrol(deltaTime) {
-    // Simple random movement
-    if (!this.patrolTarget || this.reachedTarget(this.patrolTarget, 20)) {
+    // Patrol across entire 2000x2000 map instead of small area
+    if (!this.patrolTarget || this.reachedTarget(this.patrolTarget, 30)) {
       this.patrolTarget = {
-        x: this.mesh.position.x + (Math.random() - 0.5) * 100,
-        y: this.mesh.position.y + (Math.random() - 0.5) * 100
+        x: (Math.random() - 0.5) * this.mapPatrolSize,
+        y: (Math.random() - 0.5) * this.mapPatrolSize
       };
     }
-    this.moveToward(this.patrolTarget, deltaTime, 0.5);
+    this.moveToward(this.patrolTarget, deltaTime, 0.7);
   }
 
   moveToward(targetPos, deltaTime, speedMod = 1.0) {
@@ -1471,6 +1473,11 @@ export class SimpleStationWithTrading {
     this.population = 800 + Math.floor(Math.random() * 1200);
     this.consumptionRate = this.population / 1000; // 1 good per 1000 people per day
     
+    // POPULATION DYNAMICS (Simple happiness system)
+    this.happiness = 50; // 0-100 scale
+    this.lastPirateAttack = 0;
+    this.lastPopulationUpdate = Date.now();
+    
     // PRODUCTION SYSTEM
     this.productionRate = 1.0; // Can produce 1 good per 2 materials (when conditions are met)
     this.lastProductionTime = Date.now();
@@ -1481,10 +1488,10 @@ export class SimpleStationWithTrading {
     
     // MINER SPAWNING SYSTEM
     this.miners = [];
-    this.maxMiners = 1; // Start with 1 miner per station
+    this.maxMiners = 3; // CHANGED: 3 miners per station instead of 1
     this.minerCost = { goods: 2, credits: 300 }; // Cheaper than traders
     this.lastMinerCheck = 0;
-    this.minerCheckInterval = 10000; // Check every 10 seconds
+    this.minerCheckInterval = 5000; // CHANGED: Check every 5 seconds instead of 10
     
     // PIRATE DETECTION
     this.pirateDetectionRange = 100; // Can see pirates within 100 units
@@ -1546,10 +1553,13 @@ export class SimpleStationWithTrading {
     // 3. PRODUCE GOODS (if we have materials)
     this.produceGoods(currentTime);
     
-    // 4. CHECK FOR MINER SPAWNING
+    // 4. UPDATE POPULATION DYNAMICS
+    this.updatePopulation(currentTime);
+    
+    // 5. CHECK FOR MINER SPAWNING
     this.checkMinerSpawning(currentTime, game);
     
-    // 5. UPDATE VISUAL LABEL
+    // 6. UPDATE VISUAL LABEL
     this.updateLabelContent(this.label.element);
     
     console.log(`${this.name}: after update, materials=${this.materials}, goods=${this.producedGoods}`);
@@ -1652,6 +1662,36 @@ export class SimpleStationWithTrading {
     }, 500);
   }
 
+  updatePopulation(currentTime) {
+    // Only update every 15 seconds to avoid complexity
+    if (currentTime - this.lastPopulationUpdate < 15000) return;
+    this.lastPopulationUpdate = currentTime;
+
+    // Simple happiness calculation
+    let happiness = 50; // Base
+    if (this.producedGoods >= 5) happiness += 20;
+    else if (this.producedGoods === 0) happiness -= 20;
+    
+    if (this.materials >= 10) happiness += 10;
+    else if (this.materials < 3) happiness -= 10;
+    
+    // Recent pirate attack penalty
+    if (Date.now() - this.lastPirateAttack < 60000) happiness -= 15;
+    
+    this.happiness = Math.max(0, Math.min(100, happiness));
+    
+    // Population change based on happiness
+    if (this.happiness >= 70) this.population += Math.floor(this.population * 0.01);
+    else if (this.happiness < 30) this.population -= Math.floor(this.population * 0.01);
+    
+    this.population = Math.max(100, Math.min(3000, this.population));
+    this.consumptionRate = this.population / 1000;
+  }
+
+  recordPirateAttack() {
+    this.lastPirateAttack = Date.now();
+  }
+
   // TRADE METHODS - For AI and player interaction
   canSellMaterials(quantity) {
     return this.materials >= quantity;
@@ -1745,9 +1785,9 @@ export class SimpleStationWithTrading {
     // Clean up destroyed miners
     this.miners = this.miners.filter(miner => game.entities.miners && game.entities.miners.includes(miner));
     
-    // Do we need miners? (when materials < 5 and we can afford it)
+    // Do we need miners? (when materials < 8 and we can afford it)
     if (this.miners.length < this.maxMiners && 
-        this.materials < 5 && 
+        this.materials < 8 && 
         this.producedGoods >= this.minerCost.goods && 
         this.credits >= this.minerCost.credits) {
       
@@ -1872,13 +1912,14 @@ export class SimpleStationWithTrading {
     };
   }
 
-  // UPDATE LABEL TO SHOW CREDITS
+  // UPDATE LABEL TO SHOW HAPPINESS WITH EMOJI
   updateLabelContent(div) {
     const totalCargo = this.materials + this.producedGoods;
     const cargoPercent = Math.floor((totalCargo / this.maxCargo) * 100);
+    const happinessIcon = this.happiness >= 70 ? '😊' : this.happiness >= 40 ? '😐' : '😞';
     
     div.innerHTML = `${this.name}<br>
-      <span style="font-size: 0.8em; color: #ffaa00;">Pop: ${Math.floor(this.population)}</span><br>
+      <span style="font-size: 0.8em; color: #ffaa00;">Pop: ${Math.floor(this.population)} ${happinessIcon}</span><br>
       <span style="font-size: 0.7em; color: #00ffff;">Materials: ${this.materials}</span><br>
       <span style="font-size: 0.7em; color: #ff88ff;">Goods: ${this.producedGoods}</span><br>
       <span style="font-size: 0.6em; color: #ffff00;">Credits: ${this.credits}</span><br>
@@ -2102,7 +2143,7 @@ export class SimpleMiner {
 
   findClosestAsteroid() {
     let closest = null;
-    let closestDist = 300; // Max search range
+    let closestDist = 800; // Increased from 300 to 800
 
     this.game.entities.asteroids.forEach(asteroid => {
       // Only target asteroids that have ore available for AI miners

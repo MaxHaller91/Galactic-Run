@@ -408,12 +408,15 @@ export class SpaceCargoGame {
     }
   }
   spawnAsteroids(count) {
-    for (let i = 0; i < count; i++) {
-      // Spread asteroids across the much larger zone
-      const x = (Math.random() - 0.5) * 1600; // Expanded from 400 to 1600
-      const y = (Math.random() - 0.5) * 1600;
+    // 4x asteroid count with expanded distribution
+    const expandedCount = count * 4; 
+    
+    for (let i = 0; i < expandedCount; i++) {
+      // Expanded from 1600 to 2000 for better coverage
+      const x = (Math.random() - 0.5) * 2000; 
+      const y = (Math.random() - 0.5) * 2000;
       
-      const size = 2 + Math.random() * 4; // Random sizes
+      const size = 2 + Math.random() * 4;
       const asteroid = new Asteroid(x, y, size);
       this.entities.asteroids.push(asteroid);
       this.scene.add(asteroid.mesh);
