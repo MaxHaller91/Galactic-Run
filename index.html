@@ -15,11 +15,9 @@ t<!DOCTYPE html>
           "ui": "./ui.js",
           "entities": "./entities.js",
           "friendlyShip": "./friendlyShip.js",
-          "constants": "./constants.js",
           "miningLaser": "./miningLaser.js",
           "minimap": "./minimap.js",
           "weapons": "./weapons.js",
-          "economyDebug": "./economyDebug.js",
           "debug": "./debug.js",
           "zoneEventLogger": "./zoneEventLogger.js"
         }
@@ -215,6 +213,20 @@ t<!DOCTYPE html>
         0%, 100% { opacity: 0; }
         20%, 80% { opacity: 1; }
       }
+      /* Draggable UI Panels */
+      .ui-panel.draggable {
+        cursor: move;
+        user-select: none;
+      }
+
+      .ui-panel.draggable:active {
+        cursor: grabbing;
+      }
+
+      .ui-panel.dragging {
+        z-index: 9999;
+        opacity: 0.8;
+      }
       .faction-standing-item {
         display: flex;
         justify-content: space-between;
@@ -284,7 +296,7 @@ t<!DOCTYPE html>
         <!-- Minimap canvas will be inserted here by minimap.js -->
       </div>
       <div id="ui">
-        <div class="ui-panel top-left">
+        <div class="ui-panel top-left draggable">
           <div>Credits: $<span id="credits">1000</span></div>
           <div class="health-bar">
             <div class="health-fill" id="healthFill"></div>
@@ -310,7 +322,7 @@ t<!DOCTYPE html>
           </div>
         </div>
         
-        <div class="ui-panel top-right">
+        <div class="ui-panel top-right draggable">
           <div>Cargo: [<span id="cargoCount">0</span>/<span id="cargoMax">10</span>]</div>
         </div>
         
@@ -318,7 +330,7 @@ t<!DOCTYPE html>
           <div id="messageText"></div>
         </div>
         
-        <div class="ui-panel" id="upgradePanel" style="display: none; top: 50%; left: 50%; transform: translate(-50%, -50%);">
+        <div class="ui-panel draggable" id="upgradePanel" style="display: none; top: 50%; left: 50%; transform: translate(-50%, -50%);">
           <h3>Ship Upgrades</h3>
           <div>
             <button class="upgrade-btn" id="upgradeEngine">Engine +1 ($500)</button>
@@ -328,12 +340,12 @@ t<!DOCTYPE html>
           <button class="upgrade-btn" id="closeUpgrade">Close</button>
         </div>
         
-        <div class="ui-panel" id="tradePanel" style="display: none; top: 50%; left: 50%; transform: translate(-50%, -50%);">
+        <div class="ui-panel draggable" id="tradePanel" style="display: none; top: 50%; left: 50%; transform: translate(-50%, -50%);">
           <h3>Trading Post</h3>
           <div id="tradeList"></div>
           <button class="upgrade-btn" id="closeTrade">Close</button>
         </div>
-        <div class="ui-panel" id="shipInfoPanel"> {/* Inline styles for position/size/display removed, handled by CSS rules now */}
+        <div class="ui-panel draggable" id="shipInfoPanel"> {/* Inline styles for position/size/display removed, handled by CSS rules now */}
           <h3>Ship Information</h3>
           <h4>Cargo Hold (<span id="shipInfoCargoCount">0</span>/<span id="shipInfoCargoMax">0</span>)</h4>
           <div id="shipInfoCargoList" style="margin-bottom: 10px;">
@@ -355,6 +367,20 @@ t<!DOCTYPE html>
             <!-- Standings will be populated by JS -->
           </div>
         </div>
+        
+        <!-- Economy Panel -->
+        <div class="ui-panel draggable" id="economyPanel" style="top: 120px; right: 20px; min-width: 250px; display: none;">
+          <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
+            <h3 style="margin: 0; font-size: 14px;">Zone Economy</h3>
+            <button id="closeEconomyPanel" style="background: none; border: none; color: #ff6666; cursor: pointer; font-size: 16px;">×</button>
+          </div>
+          <div id="economyData">
+            <!-- Economy data will be populated by JS -->
+          </div>
+        </div>
+
+        <!-- Economy Toggle Button -->
+        <button id="economyToggle" class="upgrade-btn" style="position: fixed; top: 60px; right: 20px; z-index: 1001; padding: 3px 8px; font-size: 11px;">Economy</button>
         <div class="ui-panel" id="minimapFiltersPanel" style="position: absolute; bottom: 80px; left: calc(50% + 75px + 10px); width: auto; padding: 6px 10px; z-index: 1001;">
           <h4 style="margin-top: 0; margin-bottom: 6px; text-align: center; font-size: 13px; color: #90c0e0; border-bottom: 1px solid #60A0D0; padding-bottom: 3px;">Filters</h4>
           <div style="display: flex; align-items: center; margin-bottom: 3px;">
@@ -369,9 +395,13 @@ t<!DOCTYPE html>
             <input type="checkbox" id="filterMinimapPirates" name="filterPirates" checked style="margin-right: 6px; vertical-align: middle; accent-color: #60A0D0;">
             <label for="filterMinimapPirates" style="font-size: 13px; color: #90c0e0; vertical-align: middle; cursor: pointer;">P</label>
           </div>
-          <div style="display: flex; align-items: center;">
+          <div style="display: flex; align-items: center; margin-bottom: 3px;">
             <input type="checkbox" id="filterMinimapMiners" name="filterMiners" checked style="margin-right: 6px; vertical-align: middle; accent-color: #60A0D0;">
             <label for="filterMinimapMiners" style="font-size: 13px; color: #90c0e0; vertical-align: middle; cursor: pointer;">M</label>
+          </div>
+          <div style="display: flex; align-items: center;">
+            <input type="checkbox" id="filterMinimapTraders" name="filterTraders" checked style="margin-right: 6px; vertical-align: middle; accent-color: #60A0D0;">
+            <label for="filterMinimapTraders" style="font-size: 13px; color: #90c0e0; vertical-align: middle; cursor: pointer;">T</label>
           </div>
         </div>
       </div>

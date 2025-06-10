@@ -29,7 +29,8 @@ export class Minimap {
             jumpGate: '#FF00FF',     // Magenta
             friendlyShip: '#FFFF00', // Yellow
             police: '#0088FF',       // Blue
-            miningShip: '#FF8800'    // Orange
+            miningShip: '#FF8800',   // Orange
+            tradingShip: '#FFaa00'   // Gold/Orange for traders
         };
         this.dotSizes = { // Radius in pixels
             player: 3,
@@ -39,13 +40,15 @@ export class Minimap {
             jumpGate: 4,
             friendlyShip: 2,
             police: 2,
-            miningShip: 2
+            miningShip: 2,
+            tradingShip: 2
         };
         this.filters = {
             asteroids: true, // Default to true as checkbox is checked initially
             stations: true,
             pirates: true,
-            miners: true // ADD THIS LINE
+            miners: true,
+            traders: true // Add traders filter
         };
         this.setupFilterListeners();
     }
@@ -75,6 +78,13 @@ export class Minimap {
         if (minerFilterCheckbox) {
             minerFilterCheckbox.addEventListener('change', (event) => {
                 this.filters.miners = event.target.checked;
+                this.update();
+            });
+        }
+        const traderFilterCheckbox = document.getElementById('filterMinimapTraders');
+        if (traderFilterCheckbox) {
+            traderFilterCheckbox.addEventListener('change', (event) => {
+                this.filters.traders = event.target.checked;
                 this.update();
             });
         }
@@ -117,6 +127,12 @@ export class Minimap {
         if (this.filters.miners && this.entities.miners) {
             this.entities.miners.forEach(miner => {
                 this.drawEntityDot(miner, this.dotColors.miningShip, this.dotSizes.miningShip);
+            });
+        }
+        // Draw trading ships (conditionally)
+        if (this.filters.traders && this.entities.tradingShips) {
+            this.entities.tradingShips.forEach(trader => {
+                this.drawEntityDot(trader, this.dotColors.tradingShip, this.dotSizes.tradingShip);
             });
         }
         // Draw asteroids (conditionally)

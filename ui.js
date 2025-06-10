@@ -8,112 +8,28 @@ class SimpleTradeUI {
     const tradePanelHeader = document.querySelector('#tradePanel h3');
     
     if (tradePanelHeader) {
-      const status = station.getEconomicStatus();
-      tradePanelHeader.innerHTML = `${station.name}<br>
-        <span style="font-size: 0.8em; color: #77aaff;">Population: ${status.population}</span><br>
-        <span style="font-size: 0.7em; color: #00ffff;">Materials: ${status.materials} | Goods: ${status.goods}</span><br>
-        <span style="font-size: 0.7em; color: #ffff00;">Station Credits: ${station.credits}</span><br>
-        <span style="font-size: 0.6em; color: #aaaaaa;">Cargo: ${status.totalCargo}/${station.maxCargo}</span>`;
+      // Use the new station properties
+      const efficiency = Math.floor((station.efficiency || 0) * 100);
+      const materials = Math.floor(station.resources.materials || 0);
+      const food = Math.floor(station.resources.food || 0);
+      
+      // Get trade info if available
+      let tradeInfo = { sells: { name: 'N/A', price: 0 }, buys: { name: 'N/A', price: 0 } };
+      if (station.getTradeInfo) {
+        tradeInfo = station.getTradeInfo();
+      }
+      
+      tradePanelHeader.innerHTML = `${station.name || station.type || 'Station'}<br>
+        <span style="font-size: 0.8em; color: #77aaff;">Efficiency: ${efficiency}%</span><br>
+        <span style="font-size: 0.7em; color: #00ffff;">Materials: ${materials}</span><br>
+        <span style="font-size: 0.7em; color: #ff88ff;">Food: ${food}</span><br>
+        <span style="font-size: 0.6em; color: #ffff00;">Sells: ${tradeInfo.sells.name} @ ${tradeInfo.sells.price}cr</span><br>
+        <span style="font-size: 0.6em; color: #ffaa00;">Buys: ${tradeInfo.buys.name} @ ${tradeInfo.buys.price}cr</span>`;
     }
 
-    tradeList.innerHTML = '';
+    tradeList.innerHTML = '<div style="padding: 10px; color: #aaaaaa;">AI traders handle resource circulation automatically.<br><br>Watch the economy panel to see trade activity!</div>';
     
-    const tradeOptions = station.getTradeOptions();
-    const playerCargo = SimplePlayerCargo.getPlayerCargoStatus(gameState);
-
-    // PLAYER BUYS FROM STATION
-    if (tradeOptions.selling.materials.canSell) {
-      const buyMaterialsBtn = document.createElement('button');
-      buyMaterialsBtn.className = 'upgrade-btn';
-      buyMaterialsBtn.innerHTML = `Buy Materials ($${tradeOptions.selling.materials.price}) [${tradeOptions.selling.materials.available}]`;
-      buyMaterialsBtn.disabled = gameState.credits < tradeOptions.selling.materials.price || !SimplePlayerCargo.canCarryMore(gameState);
-      
-      buyMaterialsBtn.addEventListener('click', () => {
-        const result = station.playerBuyMaterials(1, gameState.credits);
-        if (result.success) {
-          gameState.credits -= result.cost;
-          gameState.materials = (gameState.materials || 0) + 1;
-          ui.showMessage(`Bought 1 Materials for $${result.cost}`, 'player-trade');
-          SimpleTradeUI.showSimpleTradePanel(station, gameState, ui); // Refresh
-        } else {
-          ui.showMessage(`Cannot buy: ${result.reason}`, 'warning');
-        }
-      });
-      tradeList.appendChild(buyMaterialsBtn);
-    }
-
-    if (tradeOptions.selling.goods.canSell) {
-      const buyGoodsBtn = document.createElement('button');
-      buyGoodsBtn.className = 'upgrade-btn';
-      buyGoodsBtn.innerHTML = `Buy Goods ($${tradeOptions.selling.goods.price}) [${tradeOptions.selling.goods.available}]`;
-      buyGoodsBtn.disabled = gameState.credits < tradeOptions.selling.goods.price || !SimplePlayerCargo.canCarryMore(gameState);
-      
-      buyGoodsBtn.addEventListener('click', () => {
-        const result = station.playerBuyGoods(1, gameState.credits);
-        if (result.success) {
-          gameState.credits -= result.cost;
-          gameState.goods = (gameState.goods || 0) + 1;
-          ui.showMessage(`Bought 1 Goods for $${result.cost}`, 'player-trade');
-          SimpleTradeUI.showSimpleTradePanel(station, gameState, ui); // Refresh
-        } else {
-          ui.showMessage(`Cannot buy: ${result.reason}`, 'warning');
-        }
-      });
-      tradeList.appendChild(buyGoodsBtn);
-    }
-
-    // PLAYER SELLS TO STATION
-    if (playerCargo.materials > 0 && tradeOptions.buying.materials.canBuy) {
-      const sellMaterialsBtn = document.createElement('button');
-      sellMaterialsBtn.className = 'upgrade-btn';
-      sellMaterialsBtn.innerHTML = `Sell Materials ($${tradeOptions.buying.materials.price}) [You have: ${playerCargo.materials}]`;
-      sellMaterialsBtn.style.borderColor = '#4CAF50';
-      
-      sellMaterialsBtn.addEventListener('click', () => {
-        const result = station.playerSellMaterials(1, gameState.materials);
-        if (result.success) {
-          gameState.credits += result.value;
-          gameState.materials -= 1;
-          ui.showMessage(`Sold 1 Materials for $${result.value}`, 'player-trade');
-          SimpleTradeUI.showSimpleTradePanel(station, gameState, ui); // Refresh
-        } else {
-          ui.showMessage(`Cannot sell: ${result.reason}`, 'warning');
-        }
-      });
-      tradeList.appendChild(sellMaterialsBtn);
-    }
-
-    if (playerCargo.goods > 0 && tradeOptions.buying.goods.canBuy) {
-      const sellGoodsBtn = document.createElement('button');
-      sellGoodsBtn.className = 'upgrade-btn';
-      sellGoodsBtn.innerHTML = `Sell Goods ($${tradeOptions.buying.goods.price}) [You have: ${playerCargo.goods}]`;
-      sellGoodsBtn.style.borderColor = '#4CAF50';
-      
-      sellGoodsBtn.addEventListener('click', () => {
-        const result = station.playerSellGoods(1, gameState.goods);
-        if (result.success) {
-          gameState.credits += result.value;
-          gameState.goods -= 1;
-          ui.showMessage(`Sold 1 Goods for $${result.value}`, 'player-trade');
-          SimpleTradeUI.showSimpleTradePanel(station, gameState, ui); // Refresh
-        } else {
-          ui.showMessage(`Cannot sell: ${result.reason}`, 'warning');
-        }
-      });
-      tradeList.appendChild(sellGoodsBtn);
-    }
-
-    // Add upgrade option
-    const upgradeBtn = document.createElement('button');
-    upgradeBtn.className = 'upgrade-btn';
-    upgradeBtn.textContent = 'Ship Upgrades';
-    upgradeBtn.addEventListener('click', () => {
-      ui.hideTradePanel();
-      ui.showUpgradePanel();
-    });
-    tradeList.appendChild(upgradeBtn);
-
-    // CLOSE BUTTON
+    // Add close button
     const closeBtn = document.createElement('button');
     closeBtn.className = 'upgrade-btn';
     closeBtn.textContent = 'Close';
@@ -127,18 +43,28 @@ class SimpleTradeUI {
 }
 
 class SimplePlayerCargo {
+  static initializePlayerCargo(gameState) {
+    // Initialize simple cargo system with food
+    gameState.materials = gameState.materials || 0;
+    gameState.goods = gameState.goods || 0;
+    gameState.food = gameState.food || 0;
+    gameState.cargo = gameState.cargo || []; // Keep old cargo for backwards compatibility
+    gameState.maxCargo = gameState.maxCargo || 10;
+  }
+
   static getPlayerCargoStatus(gameState) {
     return {
       materials: gameState.materials || 0,
       goods: gameState.goods || 0,
-      totalCargo: (gameState.materials || 0) + (gameState.goods || 0),
+      food: gameState.food || 0,
+      totalCargo: (gameState.materials || 0) + (gameState.goods || 0) + (gameState.food || 0),
       maxCargo: gameState.maxCargo,
-      cargoSpace: gameState.maxCargo - ((gameState.materials || 0) + (gameState.goods || 0))
+      cargoSpace: gameState.maxCargo - ((gameState.materials || 0) + (gameState.goods || 0) + (gameState.food || 0))
     };
   }
 
   static canCarryMore(gameState, quantity = 1) {
-    const current = (gameState.materials || 0) + (gameState.goods || 0);
+    const current = (gameState.materials || 0) + (gameState.goods || 0) + (gameState.food || 0);
     return current + quantity <= gameState.maxCargo;
   }
 }
@@ -152,6 +78,7 @@ export class UIManager {
     this.jumpGateIndicators = {}; // For jump gate indicators
     this.indicatorContainer = document.getElementById('indicatorContainer');
     this.setupEventListeners();
+    this.setupDraggablePanels();
   }
 
   setupEventListeners() {
@@ -188,6 +115,87 @@ export class UIManager {
     });
     document.getElementById('closeShipInfo').addEventListener('click', () => {
         this.hideShipInfoPanel();
+    });
+    
+    // Economy panel event listeners
+    const economyToggle = document.getElementById('economyToggle');
+    const closeEconomyPanel = document.getElementById('closeEconomyPanel');
+    
+    if (economyToggle) {
+      console.log('Economy toggle button found, attaching listener');
+      economyToggle.addEventListener('click', (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        console.log('Economy toggle clicked!');
+        console.log('Panel element:', document.getElementById('economyPanel'));
+        this.toggleEconomyPanel();
+      });
+    } else {
+      console.error('Economy toggle button NOT FOUND');
+    }
+
+    if (closeEconomyPanel) {
+      closeEconomyPanel.addEventListener('click', () => {
+        this.hideEconomyPanel();
+      });
+    } else {
+      console.error('Close economy panel button NOT FOUND');
+    }
+  }
+
+  setupDraggablePanels() {
+    const draggablePanels = document.querySelectorAll('.ui-panel.draggable');
+    
+    draggablePanels.forEach(panel => {
+      let isDragging = false;
+      let startX, startY, initialX, initialY;
+      
+      panel.addEventListener('mousedown', (e) => {
+        // Only start drag if clicking on panel header or empty space (not buttons)
+        if (e.target.tagName === 'BUTTON' || e.target.tagName === 'INPUT' || e.target.tagName === 'SELECT') {
+          return;
+        }
+        
+        isDragging = true;
+        panel.classList.add('dragging');
+        
+        startX = e.clientX;
+        startY = e.clientY;
+        
+        const rect = panel.getBoundingClientRect();
+        initialX = rect.left;
+        initialY = rect.top;
+        
+        e.preventDefault();
+      });
+      
+      document.addEventListener('mousemove', (e) => {
+        if (!isDragging) return;
+        
+        const deltaX = e.clientX - startX;
+        const deltaY = e.clientY - startY;
+        
+        const newX = initialX + deltaX;
+        const newY = initialY + deltaY;
+        
+        // Keep panel within viewport
+        const maxX = window.innerWidth - panel.offsetWidth;
+        const maxY = window.innerHeight - panel.offsetHeight;
+        
+        const clampedX = Math.max(0, Math.min(newX, maxX));
+        const clampedY = Math.max(0, Math.min(newY, maxY));
+        
+        panel.style.left = clampedX + 'px';
+        panel.style.top = clampedY + 'px';
+        panel.style.transform = 'none'; // Remove any existing transforms
+      });
+      
+      document.addEventListener('mouseup', () => {
+        if (isDragging) {
+          isDragging = false;
+          panel.classList.remove('dragging');
+        }
+      });
     });
   }
   update() {
@@ -266,6 +274,180 @@ export class UIManager {
     if (currentZoneDisplay && this.gameZones && this.gameZones[this.gameState.currentZoneId]) {
       currentZoneDisplay.textContent = this.gameZones[this.gameState.currentZoneId].name;
     }
+    
+    // Update economy panel if visible
+    if (document.getElementById('economyPanel').style.display !== 'none') {
+      this.updateEconomyPanel();
+    }
+  }
+
+  toggleEconomyPanel() {
+    const panel = document.getElementById('economyPanel');
+    const isHidden = panel.style.display === 'none' || getComputedStyle(panel).display === 'none';
+    if (isHidden) {
+      this.showEconomyPanel();
+    } else {
+      this.hideEconomyPanel();
+    }
+  }
+
+  showEconomyPanel() {
+    const panel = document.getElementById('economyPanel');
+    panel.style.display = 'block';
+    this.updateEconomyPanel();
+  }
+
+  hideEconomyPanel() {
+    const panel = document.getElementById('economyPanel');
+    panel.style.display = 'none';
+  }
+
+  updateEconomyPanel() {
+    const economyData = document.getElementById('economyData');
+    if (!economyData || !this.game || !this.game.entities || !this.game.entities.stations) return;
+    
+    // Calculate zone totals
+    const totals = {
+      materials: 0,
+      goods: 0,
+      food: 0,
+      population: 0,
+      credits: 0,
+      stationCount: 0
+    };
+    
+    const stationBreakdown = [];
+    const traderActivity = [];
+    
+    this.game.entities.stations.forEach(station => {
+      const status = {
+        materials: Math.floor(station.resources.materials || 0),
+        goods: Math.floor(station.resources.goods || 0),
+        food: Math.floor(station.resources.food || 0),
+        efficiency: Math.floor((station.efficiency || 0) * 100),
+        maxMaterials: station.resources.maxMaterials || 0,
+        maxFood: station.resources.maxFood || 0,
+        needsFood: (station.resources.food || 0) < (station.resources.maxFood || 0) * 0.3,
+        needsMaterials: (station.resources.materials || 0) < (station.resources.maxMaterials || 0) * 0.3,
+        hasFoodSurplus: (station.resources.food || 0) > (station.resources.maxFood || 0) * 0.8,
+        hasMaterialsSurplus: (station.resources.materials || 0) > (station.resources.maxMaterials || 0) * 0.8
+      };
+      
+      totals.materials += status.materials;
+      totals.goods += status.goods;
+      totals.food += status.food;
+      totals.population += 1000; // Default population
+      totals.credits += Math.floor(station.credits || 0); // Add station credits
+      totals.stationCount++;
+      
+      // Get resource requests (premium pricing opportunities)
+      const requests = [];
+      const requestsText = 'Dynamic pricing active';
+      
+      // Determine production planning
+      let productionPlan = 'Idle';
+      if (station.type === 'mining' && status.food >= 1) {
+        productionPlan = '⛏️ Mining materials';
+      } else if (station.type === 'agricultural' && status.materials >= 1) {
+        productionPlan = '🌾 Growing food';
+      } else if (station.type === 'manufacturing' && status.materials >= 2 && status.food >= 1) {
+        productionPlan = '🏭 Making goods';
+      } else if (station.type === 'trade_hub') {
+        productionPlan = '🏪 Facilitating trade';
+      } else {
+        productionPlan = '⚠️ Lacking resources';
+      }
+      
+      stationBreakdown.push({
+        name: station.name || `${station.type} Station`,
+        type: station.type || 'unknown',
+        materials: Math.floor(station.resources.materials || 0),
+        food: Math.floor(station.resources.food || 0),
+        efficiency: Math.floor((station.efficiency || 0) * 100),
+        maxMaterials: station.resources.maxMaterials || 0,
+        maxFood: station.resources.maxFood || 0,
+        productionRate: station.resources.productionRate || 0,
+        // Get current prices
+        sellPrice: station.currentPrices?.sell?.price || 0,
+        buyPrice: station.currentPrices?.buy?.price || 0,
+        sellResource: station.currentPrices?.sell?.name || 'N/A',
+        buyResource: station.currentPrices?.buy?.name || 'N/A',
+        status: status,
+        requests: requestsText,
+        productionPlan: productionPlan,
+        credits: Math.floor(station.credits || 0)
+      });
+    });
+    
+    // Get trader activity from ROSEBUD TRADING SHIPS
+    if (this.game.entities.tradingShips) {
+      this.game.entities.tradingShips.forEach((trader, index) => {
+        if (trader.targetStation || trader.mission) {
+          const cargoString = trader.getCargoString ? trader.getCargoString() : `M:${trader.cargo?.materials || 0} F:${trader.cargo?.food || 0}`;
+          traderActivity.push({
+            id: trader.mesh.uuid.slice(0, 4),
+            route: trader.mission || `${trader.state} → ${trader.targetStation?.name || 'Unknown'}`,
+            cargo: cargoString,
+            credits: trader.credits || 0
+          });
+        }
+      });
+    }
+    
+    // Calculate consumption vs production
+    const dailyConsumption = {
+      food: Math.floor(totals.population / 1000),
+      goods: Math.floor(totals.population / 1000)
+    };
+    
+    economyData.innerHTML = `
+      <div style="margin-bottom: 8px;">
+        <h4 style="margin: 0 0 3px 0; color: #ffffff; font-size: 13px;">Zone Overview:</h4>
+        <div style="font-size: 11px;">
+          <div>🏭 ${totals.stationCount} Stations | 👥 ${Math.floor(totals.population)} People</div>
+          <div>📦 Materials: ${totals.materials} | 🏭 Goods: ${totals.goods} | 🍞 Food: ${totals.food}</div>
+          <div>💰 Total Credits: ${totals.credits}</div>
+          <div style="color: ${totals.food < dailyConsumption.food * 2 ? '#ff6666' : '#88ff88'};">
+            Food Supply: ${Math.floor(totals.food / Math.max(1, dailyConsumption.food))} days
+          </div>
+        </div>
+      </div>
+      
+      <div style="margin-bottom: 8px;">
+        <h4 style="margin: 0 0 3px 0; color: #ffffff; font-size: 13px;">Station Planning:</h4>
+        <div style="font-size: 10px; max-height: 150px; overflow-y: auto;">
+          ${stationBreakdown.map(station => {
+            const needsColor = (station.status.needsFood || station.status.needsGoods || station.status.needsMaterials) ? '#ffaa00' : '#88ff88';
+            const surplusItems = [];
+            if (station.status.hasFoodSurplus) surplusItems.push('Food');
+            if (station.status.hasGoodsSurplus) surplusItems.push('Goods');  
+            if (station.status.hasMaterialsSurplus) surplusItems.push('Materials');
+            const surplusText = surplusItems.length > 0 ? ` | Selling: ${surplusItems.join(', ')}` : '';
+            
+            return `
+            <div style="margin: 1px 0; padding: 3px; background: rgba(0,0,0,0.3); border-radius: 2px; border-left: 2px solid ${needsColor};">
+              <div style="font-weight: bold; font-size: 10px;">${station.name}</div>
+              <div style="font-size: 9px; color: #aaaaaa;">${station.type} | ${station.productionPlan}</div>
+              <div style="font-size: 9px;">M:${station.status.materials} G:${station.status.goods} F:${station.status.food} | $${station.credits}</div>
+              <div style="font-size: 9px; color: #ffaa00;">Requests: ${station.requests}</div>
+              ${surplusText ? `<div style="font-size: 9px; color: #88ff88;">${surplusText}</div>` : ''}
+            </div>
+          `}).join('')}
+        </div>
+      </div>
+      
+      <div>
+        <h4 style="margin: 0 0 3px 0; color: #ffffff; font-size: 13px;">Active Traders (${traderActivity.length}):</h4>
+        <div style="font-size: 10px; max-height: 100px; overflow-y: auto;">
+          ${traderActivity.length > 0 ? traderActivity.map(trader => `
+            <div style="margin: 1px 0; padding: 2px; background: rgba(0,40,80,0.3); border-radius: 2px;">
+              <div style="font-size: 9px;">🚢 ${trader.id}: ${trader.route}</div>
+              <div style="font-size: 9px; color: #aaaaaa;">Cargo: ${trader.cargo} | Credits: $${trader.credits}</div>
+            </div>
+          `).join('') : '<div style="color: #888888; font-size: 9px;">No active trade routes</div>'}
+        </div>
+      </div>
+    `;
   }
   showMessage(text, type = 'default') { // Added type parameter
     const messagePanel = document.getElementById('messagePanel');

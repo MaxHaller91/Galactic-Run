@@ -3,12 +3,11 @@ import { CSS2DRenderer, CSS2DObject } from 'three/renderers/CSS2DRenderer.js';
 // Removed duplicate imports
 import { PlayerShip } from 'ship';
 import { UIManager } from 'ui';
-import { SimpleStationWithTrading, SimplePirate, Projectile, Asteroid, JumpGate, SimplePolice, MiningShip, PirateStation, DistressBeacon, SimpleFriendlyShip, SimpleTrader, SimplePlayerCargo } from 'entities';
+import { Station, TradingShip, EconomicEngine, SimplePirate, Projectile, Asteroid, JumpGate, SimplePolice, PirateStation, DistressBeacon, SimpleFriendlyShip } from 'entities';
 // REMOVED: Complex COMMODITIES_LIST - using simple materials/goods system
 // REMOVED: MiningLaser - conflicts with AI mining system
 import { Minimap } from 'minimap'; // Import the Minimap class
 import { WeaponSystem, WEAPON_TYPES } from 'weapons'; // Import the new weapon system
-import { EconomyDebugPanel } from 'economyDebug'; // Import the economy debug panel
 import { DebugSystem } from 'debug'; // Import the debug system
 import { ZoneEventLogger } from 'zoneEventLogger'; // Import the event logger
 export class SpaceCargoGame {
@@ -23,7 +22,6 @@ export class SpaceCargoGame {
       credits: 1000,
       hull: 100,
       shields: 100,
-      cargo: [],
       maxCargo: 10,
       engineLevel: 1,
       weaponLevel: 1,
@@ -71,8 +69,12 @@ export class SpaceCargoGame {
       police: [], // Add police array
       pirateStations: [], // Add pirate stations array
       distressBeacons: [], // Add distress beacons array for MVP system
-      traders: [] // Add traders array for SimpleTrader ships
+      traders: [], // Add traders array for SimpleTrader ships
+      tradingShips: [] // Add Rosebud trading ships array
     };
+    
+    // Global order pool for simplified trading system
+    this.availableOrders = [];
     // REMOVED: MiningLaser - conflicts with AI mining system  
     this.minimap = null; // Initialize minimap reference
     this.weaponSystem = null; // Initialize weapon system reference
@@ -86,15 +88,21 @@ export class SpaceCargoGame {
   init() {
     this.setupRenderer();
     // Initialize simple player cargo system
-    SimplePlayerCargo.initializePlayerCargo(this.gameState);
+    this.gameState.materials = 0;
+    this.gameState.goods = 0;
+    this.gameState.food = 0;
+    this.gameState.maxCargo = 10;
     this.loadZone(this.gameState.currentZoneId);
     this.ui = new UIManager(this.gameState, this.zones, this); 
     // REMOVED: MiningLaser - conflicts with AI mining system
     this.weaponSystem = new WeaponSystem(this); // Initialize weapon system
-    this.economyDebug = new EconomyDebugPanel(this); // Initialize economy debug panel
+    // REMOVED: Old EconomyDebugPanel initialization
     this.debugSystem = new DebugSystem(this); // Initialize debug system
     this.eventLogger = new ZoneEventLogger(this); // Initialize event logger
     this.eventLogger.logPlayer('Game initialized', { version: '2.4.0' });
+    
+    // Initialize Economic Engine for Rosebud trading system
+    this.economicEngine = new EconomicEngine(this.entities.stations, this.entities.tradingShips);
     // Player ship is created in loadZone, ensure it exists before minimap init uses it
     // For now, minimap constructor handles if playerShip is null initially.
     // A safer approach would be to initialize minimap after playerShip is guaranteed.
@@ -187,6 +195,11 @@ export class SpaceCargoGame {
       this.entities.miningShips.forEach(ms => this.scene.remove(ms.mesh)); // Remove mining ships
       this.entities.miningShips = [];                                      // Clear array
     }
+    // Clear trading ships - CRITICAL FIX
+    if (this.entities.tradingShips) {
+      this.entities.tradingShips.forEach(ts => this.scene.remove(ts.mesh)); // Remove trading ships
+      this.entities.tradingShips = [];                                      // Clear array
+    }
     if (this.ui) { // Check if UI is initialized
       this.ui.clearAllIndicators(); // Use new UI method
     }
@@ -223,25 +236,88 @@ export class SpaceCargoGame {
         this.playerShip.mesh.position.set(0, 0, 0);
         // Populate entities for the current zone with expanded scale
         if (zoneId === 'alpha-sector') {
-            // BALANCED STATION ECONOMY - Ensure proper interdependence
-            const stationPositions = [
-                { x: -400, y: 300, name: 'Alpha Station Prime', type: 'manufacturing' },    // Core manufacturing
-                { x: 450, y: 350, name: 'Trade Hub Alpha', type: 'trade_hub' },             // Distribution center
-                { x: -200, y: -400, name: 'Commerce Central', type: 'agricultural' },       // Food production
-                { x: -600, y: -200, name: 'Mining Complex Beta', type: 'mining' },          // Materials extraction
-                { x: 300, y: -300, name: 'Industrial Station', type: 'manufacturing' },     // Additional manufacturing
-                { x: 600, y: 200, name: 'Agri-Station Gamma', type: 'agricultural' }       // Additional food
-            ];
-            stationPositions.forEach(pos => {
-                const station = new SimpleStationWithTrading(pos.x, pos.y, pos.name, CSS2DObject);
-                station.stationType = pos.type; // OVERRIDE random assignment with specific type
-                station.productionModifiers = station.getProductionModifiers(); // Recalculate modifiers
-                station.game = this; // Add game reference for event logging
-                this.entities.stations.push(station);
-                this.scene.add(station.mesh);
-                zoneConfig.stations.push(station.name);
-            });
-            this.spawnPirates(zoneConfig.pirateActivity === 'low' ? 3 : 2);
+            // Create Mining Station
+            const miningStation = new Station(
+                'mining',
+                new THREE.Vector3(-400, 300, 0),
+                {
+                    materials: 50,
+                    food: 200,
+                    maxMaterials: 200,
+                    maxFood: 100,
+                    productionRate: 5,
+                    consumptionRate: 0.5
+                },
+                {
+                    materials: { basePrice: 50 }, // Sells materials at base 50 credits
+                    food: { basePrice: 80 }       // Buys food at base 80 credits
+                }
+            );
+            miningStation.name = 'Alpha Mining Complex';
+            this.entities.stations.push(miningStation);
+            this.scene.add(miningStation.mesh);
+
+            // Add station label with live stats
+            const miningLabel = document.createElement('div');
+            miningLabel.className = 'station-label';
+            miningLabel.style.cssText = `
+              color: #00ffff;
+              font-family: 'Lucida Console', monospace;
+              font-size: 12px;
+              background: rgba(0,0,0,0.8);
+              padding: 4px 8px;
+              border-radius: 4px;
+              pointer-events: none;
+              text-align: center;
+              line-height: 1.2;
+            `;
+            const miningLabelObj = new CSS2DObject(miningLabel);
+            miningLabelObj.position.set(0, 8, 0);
+            miningStation.mesh.add(miningLabelObj);
+            miningStation.label = miningLabelObj;
+            miningStation.labelElement = miningLabel; // Store reference for updates
+
+            // Create Agricultural Station  
+            const agriStation = new Station(
+                'agricultural',
+                new THREE.Vector3(450, 350, 0),
+                {
+                    materials: 80,
+                    food: 60,
+                    maxMaterials: 100,
+                    maxFood: 200,
+                    productionRate: 5,
+                    consumptionRate: 0.3
+                },
+                {
+                    food: { basePrice: 80 },      // Sells food at base 80 credits
+                    materials: { basePrice: 50 }  // Buys materials at base 50 credits
+                }
+            );
+            agriStation.name = 'Alpha Agricultural Hub';
+            this.entities.stations.push(agriStation);
+            this.scene.add(agriStation.mesh);
+
+            // Add station label with live stats
+            const agriLabel = document.createElement('div');
+            agriLabel.className = 'station-label';
+            agriLabel.style.cssText = `
+              color: #00ffff;
+              font-family: 'Lucida Console', monospace;
+              font-size: 12px;
+              background: rgba(0,0,0,0.8);
+              padding: 4px 8px;
+              border-radius: 4px;
+              pointer-events: none;
+              text-align: center;
+              line-height: 1.2;
+            `;
+            const agriLabelObj = new CSS2DObject(agriLabel);
+            agriLabelObj.position.set(0, 8, 0);
+            agriStation.mesh.add(agriLabelObj);
+            agriStation.label = agriLabelObj;
+            agriStation.labelElement = agriLabel; // Store reference for updates
+            // REMOVED: Manual pirate spawning - pirates only spawn from pirate stations
             this.spawnAsteroids(12); // More asteroids for larger space
             this.spawnDerelicts(3); // Add derelict ships to discover
             
@@ -255,24 +331,123 @@ export class SpaceCargoGame {
             this.entities.jumpGates.push(gateToOuterWilds);
             this.scene.add(gateToOuterWilds.mesh);
         } else if (zoneId === 'outer-wilds') {
-            // FRONTIER ECONOMY - More mining-focused but still interdependent
-            const stationPositions = [
-                { x: 0, y: 0, name: 'Prospector Deep', type: 'mining' },                    // Main mining operation
-                { x: -600, y: 400, name: 'Mining Outpost Zeta', type: 'mining' },          // Additional mining
-                { x: 400, y: -300, name: 'Frontier Agri-Station', type: 'agricultural' },   // Essential food production
-                { x: -300, y: -600, name: 'Industrial Outpost', type: 'manufacturing' },    // Goods production
-                { x: 700, y: 300, name: 'Trade Post Omega', type: 'trade_hub' }             // Distribution center
-            ];
-            stationPositions.forEach(pos => {
-                const station = new SimpleStationWithTrading(pos.x, pos.y, pos.name, CSS2DObject);
-                station.stationType = pos.type; // OVERRIDE random assignment with specific type
-                station.productionModifiers = station.getProductionModifiers(); // Recalculate modifiers
-                station.game = this; // Add game reference for event logging
-                this.entities.stations.push(station);
-                this.scene.add(station.mesh);
-                zoneConfig.stations.push(station.name);
-            });
-            this.spawnPirates(zoneConfig.pirateActivity === 'high' ? 8 : 4);
+            // Create Mining Station (main operation)
+            const mainMining = new Station(
+                'mining',
+                new THREE.Vector3(0, 0, 0),
+                {
+                    materials: 80,
+                    food: 15,
+                    maxMaterials: 300,
+                    maxFood: 80,
+                    productionRate: 12,
+                    consumptionRate: 3
+                },
+                {
+                    materials: { basePrice: 45 }, // Slightly cheaper materials
+                    food: { basePrice: 90 }       // More expensive food in frontier
+                }
+            );
+            mainMining.name = 'Prospector Deep';
+            this.entities.stations.push(mainMining);
+            this.scene.add(mainMining.mesh);
+
+            // Add station label
+            const mainMiningLabel = document.createElement('div');
+            mainMiningLabel.className = 'station-label';
+            mainMiningLabel.textContent = mainMining.name;
+            mainMiningLabel.style.cssText = `
+              color: #00ffff;
+              font-family: 'Lucida Console', monospace;
+              font-size: 14px;
+              background: rgba(0,0,0,0.7);
+              padding: 2px 6px;
+              border-radius: 3px;
+              pointer-events: none;
+            `;
+            const mainMiningLabelObj = new CSS2DObject(mainMiningLabel);
+            mainMiningLabelObj.position.set(0, 8, 0);
+            mainMining.mesh.add(mainMiningLabelObj);
+            mainMining.label = mainMiningLabelObj;
+
+            // Create Agricultural Station (frontier farming)
+            const frontierAgri = new Station(
+                'agricultural',
+                new THREE.Vector3(400, -300, 0),
+                {
+                    materials: 15,
+                    food: 40,
+                    maxMaterials: 80,
+                    maxFood: 150,
+                    productionRate: 6,
+                    consumptionRate: 2
+                },
+                {
+                    food: { basePrice: 90 },      // Sells food at premium
+                    materials: { basePrice: 45 }  // Buys materials
+                }
+            );
+            frontierAgri.name = 'Frontier Agri-Station';
+            this.entities.stations.push(frontierAgri);
+            this.scene.add(frontierAgri.mesh);
+
+            // Add station label
+            const frontierAgriLabel = document.createElement('div');
+            frontierAgriLabel.className = 'station-label';
+            frontierAgriLabel.textContent = frontierAgri.name;
+            frontierAgriLabel.style.cssText = `
+              color: #00ffff;
+              font-family: 'Lucida Console', monospace;
+              font-size: 14px;
+              background: rgba(0,0,0,0.7);
+              padding: 2px 6px;
+              border-radius: 3px;
+              pointer-events: none;
+            `;
+            const frontierAgriLabelObj = new CSS2DObject(frontierAgriLabel);
+            frontierAgriLabelObj.position.set(0, 8, 0);
+            frontierAgri.mesh.add(frontierAgriLabelObj);
+            frontierAgri.label = frontierAgriLabelObj;
+
+            // Create Secondary Mining Outpost
+            const secondaryMining = new Station(
+                'mining',
+                new THREE.Vector3(-600, 400, 0),
+                {
+                    materials: 60,
+                    food: 10,
+                    maxMaterials: 250,
+                    maxFood: 60,
+                    productionRate: 10,
+                    consumptionRate: 2
+                },
+                {
+                    materials: { basePrice: 48 },
+                    food: { basePrice: 95 }
+                }
+            );
+            secondaryMining.name = 'Mining Outpost Zeta';
+            this.entities.stations.push(secondaryMining);
+            this.scene.add(secondaryMining.mesh);
+
+            // Add station label
+            const secondaryMiningLabel = document.createElement('div');
+            secondaryMiningLabel.className = 'station-label';
+            secondaryMiningLabel.textContent = secondaryMining.name;
+            secondaryMiningLabel.style.cssText = `
+              color: #00ffff;
+              font-family: 'Lucida Console', monospace;
+              font-size: 14px;
+              background: rgba(0,0,0,0.7);
+              padding: 2px 6px;
+              border-radius: 3px;
+              pointer-events: none;
+            `;
+            const secondaryMiningLabelObj = new CSS2DObject(secondaryMiningLabel);
+            secondaryMiningLabelObj.position.set(0, 8, 0);
+            secondaryMining.mesh.add(secondaryMiningLabelObj);
+            secondaryMining.label = secondaryMiningLabelObj;
+            // REMOVED: Manual pirate spawning - pirates only spawn from pirate stations
             this.spawnAsteroids(25); // Rich in resources
             this.spawnDerelicts(5); // More derelicts in dangerous space
             
@@ -291,27 +466,13 @@ export class SpaceCargoGame {
         }
         this.spawnFriendlyShips(zoneId === 'alpha-sector' ? 2 : 1);
         this.spawnPolice(zoneId, zoneConfig.factionControl);
-        this.spawnTraders(zoneId === 'alpha-sector' ? 3 : 2); // Spawn trader ships for economy
+        this.spawnTraders(zoneId === 'alpha-sector' ? 8 : 6); // Much more traders
         if (this.ui) {
             this.ui.initializeStationIndicators(this.entities.stations);
             this.ui.initializeJumpGateIndicators(this.entities.jumpGates); // Initialize jump gate indicators
         }
         if (this.ui) this.ui.showMessage(`Entered ${zoneConfig.name}`);
     }, 150); // Delay slightly less than flash duration for smoother transition
-  }
-  // The spawnPirates function and others should be outside the loadZone method.
-  // The extra closing brace for loadZone was also removed.
-  spawnPirates(count) {
-    for (let i = 0; i < count; i++) {
-      const angle = Math.random() * Math.PI * 2;
-      const distance = 100 + Math.random() * 100;
-      const x = this.playerShip.mesh.position.x + Math.cos(angle) * distance;
-      const y = this.playerShip.mesh.position.y + Math.sin(angle) * distance;
-      
-      const pirate = new SimplePirate(x, y);
-      this.entities.pirates.push(pirate);
-      this.scene.add(pirate.mesh);
-    }
   }
   spawnFriendlyShips(count) {
     for (let i = 0; i < count; i++) {
@@ -362,24 +523,41 @@ export class SpaceCargoGame {
   }
 
   spawnTraders(count) {
+    console.log(`🚢 SPAWNING ${count} TRADING SHIPS`);
+    console.log(`📊 Available stations: ${this.entities.stations.length}`);
+    
     for (let i = 0; i < count; i++) {
       // Spawn traders between stations for economy circulation
-      let spawnX, spawnY;
+      let spawnPos;
       if (this.entities.stations.length > 0) {
         const randomStation = this.entities.stations[Math.floor(Math.random() * this.entities.stations.length)];
-        spawnX = randomStation.mesh.position.x + (Math.random() - 0.5) * 60;
-        spawnY = randomStation.mesh.position.y + (Math.random() - 0.5) * 60;
+        spawnPos = new THREE.Vector3(
+          randomStation.mesh.position.x + (Math.random() - 0.5) * 60,
+          randomStation.mesh.position.y + (Math.random() - 0.5) * 60,
+          0
+        );
+        console.log(`📍 Trader ${i+1} spawn position:`, spawnPos);
       } else {
-        spawnX = (Math.random() - 0.5) * 200;
-        spawnY = (Math.random() - 0.5) * 200;
+        spawnPos = new THREE.Vector3(0, 0, 0);
+        console.log(`⚠️ No stations found, spawning trader ${i+1} at origin`);
       }
       
-      // Create trader with access to all stations for trading AI
-      const trader = new SimpleTrader(spawnX, spawnY, this.entities.stations, this);
-      
-      this.entities.traders.push(trader);
-      this.scene.add(trader.mesh);
+      try {
+        // Create trading ship with starting cargo
+        const trader = new TradingShip(spawnPos, this.entities.stations);
+        console.log(`✅ Created trader ${i+1}:`, trader);
+        
+        // Add to entities (create new array if needed)
+        if (!this.entities.tradingShips) this.entities.tradingShips = [];
+        this.entities.tradingShips.push(trader);
+        this.scene.add(trader.mesh);
+        console.log(`📦 Added trader ${i+1} to scene and entities. Total traders: ${this.entities.tradingShips.length}`);
+      } catch (error) {
+        console.error(`❌ FAILED to create trader ${i+1}:`, error);
+      }
     }
+    
+    console.log(`🏁 SPAWN COMPLETE. Final trader count: ${this.entities.tradingShips.length}`);
   }
 
   spawnConstructedShip(station, shipType) {
@@ -397,11 +575,9 @@ export class SpaceCargoGame {
         this.entities.police.push(newShip);
         break;
       case 'miner':
-        // We'll create MiningShip class in Phase 2
-        newShip = new MiningShip(x, y, this.entities.asteroids, station);
-        if (!this.entities.miningShips) this.entities.miningShips = [];
-        this.entities.miningShips.push(newShip);
-        break;
+        // MiningShip not implemented yet
+        console.log('Mining ship construction not yet implemented');
+        return;
       case 'trader':
         newShip = new FriendlyShip(x, y, this.entities.stations, this);
         this.entities.friendlyShips.push(newShip);
@@ -532,6 +708,12 @@ export class SpaceCargoGame {
       if (e.code === 'KeyY') {
         this.toggleShipInfoPanel();
       }
+      if (e.code === 'KeyO') {
+        if (this.ui) {
+          this.ui.toggleEconomyPanel();
+          this.ui.showMessage('Economy panel toggled', 'system-neutral');
+        }
+      }
       if (e.code === 'Digit1' || e.code === 'Digit2' || e.code === 'Digit3') {
         // Switch weapons with number keys
         if (this.weaponSystem) {
@@ -546,6 +728,27 @@ export class SpaceCargoGame {
         // Cycle weapons with Q key
         if (this.weaponSystem) {
           this.weaponSystem.switchWeapon();
+        }
+      }
+      if (e.code === 'Comma') {
+        // Decrease time scale
+        const speeds = [0.25, 0.5, 0.75, 1.0];
+        const currentIndex = speeds.indexOf(this.timeScale);
+        if (currentIndex > 0) {
+          this.timeScale = speeds[currentIndex - 1];
+          this.ui.showMessage(`Game Speed: ${this.timeScale}x`, 'system-neutral');
+        }
+      }
+      if (e.code === 'Period') {
+        // Increase time scale
+        const speeds = [1.0, 1.5, 2.0, 3.0, 5.0];
+        const currentIndex = speeds.indexOf(this.timeScale);
+        if (currentIndex >= 0 && currentIndex < speeds.length - 1) {
+          this.timeScale = speeds[currentIndex + 1];
+          this.ui.showMessage(`Game Speed: ${this.timeScale}x`, 'system-neutral');
+        } else if (this.timeScale < 1.0) {
+          this.timeScale = 1.0;
+          this.ui.showMessage(`Game Speed: ${this.timeScale}x`, 'system-neutral');
         }
       }
     });
@@ -651,57 +854,6 @@ export class SpaceCargoGame {
       this.ui.showMessage('Cargo hold full! Cannot salvage derelict.', 'warning');
     }
   }
-  attemptMining() {
-    // This will be implemented in a future step
-    // For now, it could log or show a message
-    const playerPos = this.playerShip.mesh.position;
-    let minedSomething = false;
-    for (let i = this.entities.asteroids.length - 1; i >= 0; i--) {
-      const asteroid = this.entities.asteroids[i];
-      const distance = playerPos.distanceTo(asteroid.mesh.position);
-      const miningRange = asteroid.size + 15; // Increased range for laser
-      if (distance < miningRange) { // Check if close enough to mine
-        minedSomething = true;
-        if (!this.miningLaser.isActive) {
-          this.miningLaser.activate(playerPos, asteroid.mesh.position);
-        }
-        this.miningLaser.updatePositions(playerPos, asteroid.mesh.position);
-        // Simulate continuous mining: reduce health over time
-        // For simplicity, let's make it so holding 'M' damages it over time.
-        // A more robust solution would involve a timer or mining progress bar.
-        // Assuming deltaTime is available or a fixed mining rate.
-        // For now, let's use a simple damage per "M" press.
-        asteroid.health -= 2; // Reduced damage per press, needs to be held
-        this.ui.showMessage(`Mining ${asteroid.resourceType}... Health: ${Math.max(0, asteroid.health)}`, 'system-neutral');
-        if (asteroid.health <= 0) {
-          this.ui.showMessage(`${asteroid.resourceType} collected! +$${asteroid.resourceValue}`, 'player-trade');
-          if (this.gameState.cargo.length < this.gameState.maxCargo) {
-            this.gameState.cargo.push({ 
-              name: asteroid.resourceType, 
-              type: 'raw', // Assume mined resources are raw type
-              paidPrice: 0, // Acquired, not bought
-              basePrice: asteroid.resourceValue // Store its base value for potential sale
-            });
-            this.gameState.credits += asteroid.resourceValue; // Give credits for mined ore directly for now
-          } else {
-            this.ui.showMessage(`Cargo full! ${asteroid.resourceType} lost.`, 'warning');
-          }
-          this.scene.remove(asteroid.mesh);
-          this.entities.asteroids.splice(i, 1);
-          this.miningLaser.deactivate(); // Stop laser when asteroid is destroyed
-        }
-        break; // Mine one at a time
-      }
-    }
-    if (!minedSomething) {
-      this.ui.showMessage('No asteroids in range to mine.', 'info');
-    }
-    if (!minedSomething && this.miningLaser.isActive) {
-      this.miningLaser.deactivate(); // If M is pressed but no target, deactivate
-    }
-     // Reset KeyM_released after processing
-    this.keys['KeyM_released'] = false;
-  }
 
   update(deltaTime) {
     if (this.gameState.isPaused) return;
@@ -803,9 +955,7 @@ export class SpaceCargoGame {
               this.entities.pirates.splice(i, 1);
               this.gameState.credits += 50;
               this.ui.showMessage('Pirate destroyed! +$50');
-              if (this.entities.pirates.length < 3) {
-                  setTimeout(() => this.spawnPirates(1), 5000);
-              }
+              // REMOVED: Random pirate respawning - pirates only spawn from pirate stations
             } else {
               this.ui.showMessage('Pirate hit!');
             }
@@ -893,12 +1043,51 @@ export class SpaceCargoGame {
     // Update stations with new SimpleStation system
     this.entities.stations.forEach(station => {
       station.update(scaledDeltaTime, this);
+      
+      // Update station labels with live stats
+      if (station.labelElement) {
+        const efficiency = Math.round(station.efficiency * 100);
+        const materials = Math.floor(station.resources.materials);
+        const food = Math.floor(station.resources.food);
+        const status = station.type === 'mining' ? 
+          (station.efficiency > 0.5 ? '⛏️ Mining' : '⚠️ Low Food') : 
+          (station.efficiency > 0.5 ? '🌾 Growing' : '⚠️ Low Materials');
+        
+        const sellPrice = station.currentPrices?.sell?.price || 0;
+        const buyPrice = station.currentPrices?.buy?.price || 0;
+        const sellResource = station.currentPrices?.sell?.name || 'N/A';
+        const buyResource = station.currentPrices?.buy?.name || 'N/A';
+        const credits = Math.floor(station.credits || 0);
+        
+        station.labelElement.innerHTML = `
+          <div style="font-weight: bold; color: #00ffff;">${station.name}</div>
+          <div style="color: #ffff00;">Efficiency: ${efficiency}% | Credits: $${credits}</div>
+          <div style="color: #88ff88;">Materials: ${materials} | Food: ${food}</div>
+          <div style="color: #00ff00;">Sells ${sellResource}: $${sellPrice}</div>
+          <div style="color: #ffaa00;">Buys ${buyResource}: $${buyPrice}</div>
+          <div style="color: #aaaaaa;">${status}</div>
+        `;
+      }
     });
     
-    // Update traders for economy circulation
-    if (this.entities.traders) {
-      this.entities.traders = this.entities.traders.filter(trader => trader && trader.mesh);
-      this.entities.traders.forEach(trader => trader.update(scaledDeltaTime));
+    // Update traders for economy circulation (Rosebud system)
+    if (this.entities.tradingShips) {
+      this.entities.tradingShips = this.entities.tradingShips.filter(trader => {
+        if (!trader || !trader.mesh) return false;
+        
+        trader.update(scaledDeltaTime, this);
+        
+        // Check if ship died (ran out of credits)
+        if (trader.isDead || trader.credits <= 0) {
+          this.scene.remove(trader.mesh);
+          if (this.ui) {
+            this.ui.showMessage(`Trading ship ran out of credits and was lost!`, 'warning');
+          }
+          return false; // Remove from array
+        }
+        
+        return true; // Keep in array
+      });
     }
     
     // Update miners for material supply
@@ -912,10 +1101,12 @@ export class SpaceCargoGame {
       this.weaponSystem.update(deltaTime);
     }
     
-    // Update economy debug panel
-    if (this.economyDebug) {
-      this.economyDebug.update(deltaTime);
+    // Update Economic Engine for Rosebud trading system
+    if (this.economicEngine) {
+      this.economicEngine.update(scaledDeltaTime);
     }
+    
+    // REMOVED: Old economyDebug update call
     if (this.miningLaser && this.miningLaser.isActive) {
       // If player or asteroid moves, laser needs to be updated
       // For simplicity, we re-check the closest asteroid if laser is active.
@@ -938,17 +1129,7 @@ export class SpaceCargoGame {
       this.miningLaser.update(); // For animation like pulsing
     }
     
-    // Spawn more pirates occasionally if player ventures out or time passes
-    // This random spawn is now less critical as pirates respawn upon destruction.
-    // We can make this conditional on player distance from start or game time.
-    // For now, reducing its frequency.
-    if (Math.random() < 0.0001 && this.entities.pirates.length < 5) {
-        const playerPos = this.playerShip.mesh.position;
-        const distFromStart = playerPos.distanceTo(new THREE.Vector3(-80, 50, 0));
-        if (distFromStart > 150) { // Only spawn new pirates if player is far from start
-             this.spawnPirates(1);
-        }
-    }
+    // REMOVED: Random pirate spawning - pirates now only spawn from pirate stations
     
     // Shield regeneration
     if (this.gameState.shields < 100) {
@@ -983,10 +1164,10 @@ export class SpaceCargoGame {
                          stationScreenPos.z < 1; // Ensure it's in front of the camera's near plane
       if (isOnScreen) {
         visible = false; // Hide indicator if station's main label is likely visible
-        station.label.visible = true;
+        if (station.label) station.label.visible = true;
       } else {
         visible = true; // Show indicator because station is off-screen
-        station.label.visible = false;
+        if (station.label) station.label.visible = false;
         // Clamp indicator to screen edges
         indicatorX = Math.max(padding, Math.min(screenX, screenWidth - padding));
         indicatorY = Math.max(padding, Math.min(screenY, screenHeight - padding));
@@ -1036,10 +1217,10 @@ export class SpaceCargoGame {
                          gateScreenPos.z < 1; 
       if (isOnScreen) {
         visible = false; 
-        gate.label.visible = true;
+        if (gate.label) gate.label.visible = true;
       } else {
         visible = true; 
-        gate.label.visible = false;
+        if (gate.label) gate.label.visible = false;
         indicatorX = Math.max(padding, Math.min(screenX, screenWidth - padding));
         indicatorY = Math.max(padding, Math.min(screenY, screenHeight - padding));
         if (screenX < padding || screenX > screenWidth - padding || screenY < padding || screenY > screenHeight - padding) {

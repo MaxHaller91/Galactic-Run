@@ -1,45 +1,33 @@
 import * as THREE from 'three';
 
-// REMOVED: Massive unused SpaceStation class (200+ lines of dead code)
-// REMOVED: Complex COMMODITIES_LIST import - using simple materials/goods system
-
-// 1. SIMPLE DISTRESS BEACON ENTITY
+// DISTRESS BEACON
 export class DistressBeacon {
   constructor(x, y) {
     this.mesh = this.createMesh();
     this.mesh.position.set(x, y, 0);
-    this.timeLeft = 30; // Beacon lasts 30 seconds
-    this.responded = false; // Has police responded yet?
+    this.timeLeft = 30;
+    this.responded = false;
   }
 
   createMesh() {
     const geometry = new THREE.SphereGeometry(2, 8, 8);
-    const material = new THREE.MeshBasicMaterial({ 
-      color: 0xff0000, 
-      transparent: true,
-      opacity: 0.8 
-    });
+    const material = new THREE.MeshBasicMaterial({ color: 0xff0000, transparent: true, opacity: 0.8 });
     const beacon = new THREE.Mesh(geometry, material);
-    
-    // Pulsing animation
     beacon.userData = { pulseTimer: 0 };
     return beacon;
   }
 
   update(deltaTime) {
     this.timeLeft -= deltaTime;
-    
-    // Pulse animation
     this.mesh.userData.pulseTimer += deltaTime * 4;
     const pulse = Math.sin(this.mesh.userData.pulseTimer) * 0.3 + 0.7;
     this.mesh.material.opacity = pulse;
     this.mesh.scale.setScalar(0.8 + pulse * 0.4);
-    
-    return this.timeLeft > 0; // Return false when expired
+    return this.timeLeft > 0;
   }
 }
 
-// 2. SIMPLE PIRATE - ONLY 3 STATES
+// PIRATE
 export class SimplePirate {
   constructor(x, y) {
     this.mesh = this.createMesh();
@@ -48,17 +36,13 @@ export class SimplePirate {
     this.maxSpeed = 15;
     this.health = 30;
     this.maxHealth = 30;
-    
-    // SIMPLE STATE MACHINE
-    this.state = 'HUNT'; // HUNT, ATTACK, FLEE
+    this.state = 'HUNT';
     this.target = null;
     this.lastShotTime = 0;
     this.fireRate = 800;
     this.attackRange = 60;
-    this.detectionRange = 200; // CHANGED: Increased from 100 to 200
-    this.pursuitRange = 400; // How far pirates will chase
-    this.mapPatrolSize = 2000; // Patrol full map
-    this.optimalRange = 45; // Stay this far from target
+    this.detectionRange = 200;
+    this.optimalRange = 45;
   }
 
   createMesh() {
@@ -72,21 +56,12 @@ export class SimplePirate {
   }
 
   update(deltaTime, game) {
-    // SIMPLE 3-STATE MACHINE
     switch(this.state) {
-      case 'HUNT':
-        this.huntTarget(deltaTime, game);
-        break;
-      case 'ATTACK':
-        this.attackTarget(deltaTime, game);
-        break;
-      case 'FLEE':
-        this.fleeFromDanger(deltaTime, game);
-        break;
+      case 'HUNT': this.huntTarget(deltaTime, game); break;
+      case 'ATTACK': this.attackTarget(deltaTime, game); break;
+      case 'FLEE': this.fleeFromDanger(deltaTime, game); break;
     }
-
-    // SIMPLE MOVEMENT
-    this.velocity.multiplyScalar(0.8); // Strong dampening
+    this.velocity.multiplyScalar(0.8);
     if (this.velocity.length() > this.maxSpeed) {
       this.velocity.normalize().multiplyScalar(this.maxSpeed);
     }
@@ -95,30 +70,20 @@ export class SimplePirate {
   }
 
   huntTarget(deltaTime, game) {
-    // Find closest target
     this.target = this.findClosestTarget(game);
-    
     if (!this.target) {
-      // No target, patrol randomly
       this.patrol(deltaTime);
       return;
     }
-
     const distance = this.mesh.position.distanceTo(this.target.position);
-    
-    // Too far? Give up
     if (distance > this.detectionRange * 2) {
       this.target = null;
       return;
     }
-
-    // Close enough to attack?
     if (distance < this.attackRange) {
       this.state = 'ATTACK';
       return;
     }
-
-    // Chase target
     this.moveToward(this.target.position, deltaTime);
   }
 
@@ -127,57 +92,32 @@ export class SimplePirate {
       this.state = 'HUNT';
       return;
     }
-
     const distance = this.mesh.position.distanceTo(this.target.position);
-    
-    // Target escaped?
     if (distance > this.attackRange * 1.5) {
       this.state = 'HUNT';
       return;
     }
-
-    // Health low? Flee!
-    if (this.health < this.maxHealth * 0.4) {
+    if (this.health < this.maxHealth * 0.4 || this.policeNearby(game)) {
       this.state = 'FLEE';
       return;
     }
-
-    // Police nearby? Flee!
-    if (this.policeNearby(game)) {
-      this.state = 'FLEE';
-      return;
-    }
-
-    // MAINTAIN OPTIMAL RANGE
     if (distance < this.optimalRange) {
-      // Too close, back away
       this.moveAwayFrom(this.target.position, deltaTime);
     } else if (distance > this.optimalRange * 1.3) {
-      // Too far, move closer
       this.moveToward(this.target.position, deltaTime);
     } else {
-      // Good range, circle strafe
       this.circleTarget(this.target.position, deltaTime);
     }
-
-    // Shoot
     this.fireAtTarget(game);
   }
 
   fleeFromDanger(deltaTime, game) {
-    // Find nearest threat
     const threats = this.findThreats(game);
-    
     if (threats.length === 0) {
-      // No more threats, go back to hunting
       this.state = 'HUNT';
       return;
     }
-
-    // Flee from closest threat
     this.moveAwayFrom(threats[0].position, deltaTime, 1.5);
-    
-    // Recovered enough to fight?
     if (this.health > this.maxHealth * 0.7 && !this.policeNearby(game)) {
       this.state = 'HUNT';
     }
@@ -186,30 +126,22 @@ export class SimplePirate {
   findClosestTarget(game) {
     let closest = null;
     let closestDist = this.detectionRange;
-
-    // Check player
     const playerDist = this.mesh.position.distanceTo(game.playerShip.mesh.position);
     if (playerDist < closestDist) {
       closest = { position: game.playerShip.mesh.position, type: 'player', entity: game.playerShip };
       closestDist = playerDist;
     }
-
-    // Check friendly ships (but ignore docked ones)
     game.entities.friendlyShips.forEach(ship => {
-      if (ship.docked) return; // Skip docked ships - they're safe!
-      
+      if (ship.docked) return;
       const dist = this.mesh.position.distanceTo(ship.mesh.position);
       if (dist < closestDist) {
         closest = { position: ship.mesh.position, type: 'friendly', entity: ship };
         closestDist = dist;
       }
     });
-
-    // Check traders (but ignore docked ones)
-    if (game.entities.traders) {
-      game.entities.traders.forEach(trader => {
-        if (trader.docked) return; // Skip docked traders - they're safe!
-        
+    if (game.entities.tradingShips) {
+      game.entities.tradingShips.forEach(trader => {
+        if (trader.docked) return;
         const dist = this.mesh.position.distanceTo(trader.mesh.position);
         if (dist < closestDist) {
           closest = { position: trader.mesh.position, type: 'trader', entity: trader };
@@ -217,21 +149,17 @@ export class SimplePirate {
         }
       });
     }
-
     return closest;
   }
 
   findThreats(game) {
     const threats = [];
-    
-    // Police are threats
     game.entities.police.forEach(police => {
       const dist = this.mesh.position.distanceTo(police.mesh.position);
       if (dist < 120) {
         threats.push({ position: police.mesh.position, distance: dist });
       }
     });
-
     return threats.sort((a, b) => a.distance - b.distance);
   }
 
@@ -242,11 +170,10 @@ export class SimplePirate {
   }
 
   patrol(deltaTime) {
-    // Patrol across entire 2000x2000 map instead of small area
     if (!this.patrolTarget || this.reachedTarget(this.patrolTarget, 30)) {
       this.patrolTarget = {
-        x: (Math.random() - 0.5) * this.mapPatrolSize,
-        y: (Math.random() - 0.5) * this.mapPatrolSize
+        x: (Math.random() - 0.5) * 2000,
+        y: (Math.random() - 0.5) * 2000
       };
     }
     this.moveToward(this.patrolTarget, deltaTime, 0.7);
@@ -256,13 +183,10 @@ export class SimplePirate {
     const dx = targetPos.x - this.mesh.position.x;
     const dy = targetPos.y - this.mesh.position.y;
     const dist = Math.sqrt(dx * dx + dy * dy);
-    
     if (dist > 1) {
       this.velocity.x += (dx / dist) * this.maxSpeed * speedMod * deltaTime * 3;
       this.velocity.y += (dy / dist) * this.maxSpeed * speedMod * deltaTime * 3;
     }
-    
-    // Face movement direction
     this.mesh.rotation.z = Math.atan2(dy, dx) + Math.PI / 2;
   }
 
@@ -270,12 +194,9 @@ export class SimplePirate {
     const dx = this.mesh.position.x - targetPos.x;
     const dy = this.mesh.position.y - targetPos.y;
     const dist = Math.sqrt(dx * dx + dy * dy);
-    
     if (dist > 1) {
       this.velocity.x += (dx / dist) * this.maxSpeed * speedMod * deltaTime * 3;
       this.velocity.y += (dy / dist) * this.maxSpeed * speedMod * deltaTime * 3;
-      
-      // Face movement direction
       this.mesh.rotation.z = Math.atan2(dy, dx) + Math.PI / 2;
     }
   }
@@ -284,16 +205,11 @@ export class SimplePirate {
     const dx = targetPos.x - this.mesh.position.x;
     const dy = targetPos.y - this.mesh.position.y;
     const dist = Math.sqrt(dx * dx + dy * dy);
-    
     if (dist > 1) {
-      // Perpendicular direction for circling
       const perpX = -dy / dist;
       const perpY = dx / dist;
-      
       this.velocity.x += perpX * this.maxSpeed * deltaTime * 2;
       this.velocity.y += perpY * this.maxSpeed * deltaTime * 2;
-      
-      // Face target
       this.mesh.rotation.z = Math.atan2(dy, dx) + Math.PI / 2;
     }
   }
@@ -301,19 +217,11 @@ export class SimplePirate {
   fireAtTarget(game) {
     const currentTime = Date.now();
     if (currentTime - this.lastShotTime < this.fireRate) return;
-
     const dx = this.target.position.x - this.mesh.position.x;
     const dy = this.target.position.y - this.mesh.position.y;
     const angle = Math.atan2(dy, dx);
-
-    const projectile = new Projectile(
-      this.mesh.position.x,
-      this.mesh.position.y,
-      angle,
-      false // Enemy projectile
-    );
+    const projectile = new Projectile(this.mesh.position.x, this.mesh.position.y, angle, false);
     projectile.damage = 15;
-
     game.entities.projectiles.push(projectile);
     game.scene.add(projectile.mesh);
     this.lastShotTime = currentTime;
@@ -331,7 +239,7 @@ export class SimplePirate {
   }
 }
 
-// 3. SIMPLE POLICE - ONLY 3 STATES
+// POLICE (simplified)
 export class SimplePolice {
   constructor(x, y, stations, faction) {
     this.mesh = this.createMesh(faction);
@@ -342,26 +250,16 @@ export class SimplePolice {
     this.maxHealth = 60;
     this.faction = faction;
     this.stations = stations;
-    
-    // SIMPLE STATE MACHINE
-    this.state = 'PATROL'; // PATROL, RESPOND, FIGHT
+    this.state = 'PATROL';
     this.target = null;
-    this.patrolTarget = null;
     this.lastShotTime = 0;
     this.fireRate = 400;
-    this.attackRange = 70;
-    this.detectionRange = 120;
-    this.optimalRange = 55;
   }
 
   createMesh(faction) {
     const group = new THREE.Group();
     const hullGeometry = new THREE.ConeGeometry(0.6, 3, 4);
-    const factionColors = {
-      'Federated Commerce Guild': 0x0088ff,
-      'Outer Rim Prospectors': 0xffaa00,
-    };
-    const hullColor = factionColors[faction] || 0x00aaff;
+    const hullColor = faction === 'Federated Commerce Guild' ? 0x0088ff : 0xffaa00;
     const hullMaterial = new THREE.MeshBasicMaterial({ color: hullColor });
     const hull = new THREE.Mesh(hullGeometry, hullMaterial);
     hull.rotation.z = Math.PI / 2;
@@ -370,259 +268,12 @@ export class SimplePolice {
   }
 
   update(deltaTime, game) {
-    // SIMPLE 3-STATE MACHINE
-    switch(this.state) {
-      case 'PATROL':
-        this.patrolArea(deltaTime, game);
-        break;
-      case 'RESPOND':
-        this.respondToBeacon(deltaTime, game);
-        break;
-      case 'FIGHT':
-        this.fightPirates(deltaTime, game);
-        break;
-    }
-
-    // SIMPLE MOVEMENT
-    this.velocity.multiplyScalar(0.8); // Strong dampening
+    this.velocity.multiplyScalar(0.8);
     if (this.velocity.length() > this.maxSpeed) {
       this.velocity.normalize().multiplyScalar(this.maxSpeed);
     }
     this.mesh.position.x += this.velocity.x * deltaTime;
     this.mesh.position.y += this.velocity.y * deltaTime;
-  }
-
-  patrolArea(deltaTime, game) {
-    // Check for pirates
-    const pirate = this.findClosestPirate(game);
-    if (pirate) {
-      this.target = pirate;
-      this.state = 'FIGHT';
-      return;
-    }
-
-    // Check for distress beacons
-    const beacon = this.findClosestBeacon(game);
-    if (beacon) {
-      this.target = beacon;
-      this.state = 'RESPOND';
-      return;
-    }
-
-    // Normal patrol
-    if (!this.patrolTarget || this.reachedTarget(this.patrolTarget, 25)) {
-      this.selectPatrolTarget();
-    }
-    this.moveToward(this.patrolTarget, deltaTime, 0.7);
-  }
-
-  respondToBeacon(deltaTime, game) {
-    // Is beacon still there?
-    if (!game.entities.distressBeacons.includes(this.target)) {
-      this.state = 'PATROL';
-      this.target = null;
-      return;
-    }
-
-    // Move to beacon
-    this.moveToward(this.target.mesh.position, deltaTime, 1.5);
-
-    // Reached beacon area? Look for pirates
-    if (this.reachedTarget(this.target.mesh.position, 30)) {
-      const pirate = this.findClosestPirate(game);
-      if (pirate) {
-        this.target = pirate;
-        this.state = 'FIGHT';
-      } else {
-        // No pirates found, back to patrol
-        this.state = 'PATROL';
-        this.target = null;
-      }
-    }
-  }
-
-  fightPirates(deltaTime, game) {
-    // Is target still a valid pirate?
-    if (!this.target || !game.entities.pirates.includes(this.target)) {
-      // Look for another pirate nearby
-      const pirate = this.findClosestPirate(game);
-      if (pirate) {
-        this.target = pirate;
-      } else {
-        this.state = 'PATROL';
-        this.target = null;
-        return;
-      }
-    }
-
-    const distance = this.mesh.position.distanceTo(this.target.mesh.position);
-    
-    // Pirate escaped?
-    if (distance > this.detectionRange * 2) {
-      this.state = 'PATROL';
-      this.target = null;
-      return;
-    }
-
-    // Health low? Retreat but keep target
-    if (this.health < this.maxHealth * 0.3) {
-      this.moveTowardNearestStation(deltaTime);
-      // Still keep target and try to shoot
-      if (distance < this.attackRange) {
-        this.fireAtTarget(game);
-      }
-      return;
-    }
-
-    // MAINTAIN OPTIMAL RANGE
-    if (distance < this.optimalRange) {
-      // Too close, back away
-      this.moveAwayFrom(this.target.mesh.position, deltaTime);
-    } else if (distance > this.optimalRange * 1.3) {
-      // Too far, move closer
-      this.moveToward(this.target.mesh.position, deltaTime);
-    } else {
-      // Good range, circle strafe
-      this.circleTarget(this.target.mesh.position, deltaTime);
-    }
-
-    // Shoot
-    if (distance < this.attackRange) {
-      this.fireAtTarget(game);
-    }
-  }
-
-  findClosestPirate(game) {
-    let closest = null;
-    let closestDist = this.detectionRange;
-
-    game.entities.pirates.forEach(pirate => {
-      const dist = this.mesh.position.distanceTo(pirate.mesh.position);
-      if (dist < closestDist) {
-        closest = pirate;
-        closestDist = dist;
-      }
-    });
-
-    return closest;
-  }
-
-  findClosestBeacon(game) {
-    if (!game.entities.distressBeacons) return null;
-    
-    let closest = null;
-    let closestDist = 200; // Max response range
-
-    game.entities.distressBeacons.forEach(beacon => {
-      const dist = this.mesh.position.distanceTo(beacon.mesh.position);
-      if (dist < closestDist) {
-        closest = beacon;
-        closestDist = dist;
-      }
-    });
-
-    return closest;
-  }
-
-  selectPatrolTarget() {
-    if (this.stations.length === 0) return;
-    
-    // Patrol around a random friendly station
-    const station = this.stations[Math.floor(Math.random() * this.stations.length)];
-    const angle = Math.random() * Math.PI * 2;
-    const distance = 40 + Math.random() * 30; // 40-70 units from station
-    
-    this.patrolTarget = {
-      x: station.mesh.position.x + Math.cos(angle) * distance,
-      y: station.mesh.position.y + Math.sin(angle) * distance
-    };
-  }
-
-  moveTowardNearestStation(deltaTime) {
-    if (this.stations.length === 0) return;
-    
-    let nearest = this.stations[0];
-    let nearestDist = this.mesh.position.distanceTo(nearest.mesh.position);
-    
-    this.stations.forEach(station => {
-      const dist = this.mesh.position.distanceTo(station.mesh.position);
-      if (dist < nearestDist) {
-        nearestDist = dist;
-        nearest = station;
-      }
-    });
-    
-    this.moveToward(nearest.mesh.position, deltaTime, 1.2);
-  }
-
-  fireAtTarget(game) {
-    const currentTime = Date.now();
-    if (currentTime - this.lastShotTime < this.fireRate) return;
-
-    const dx = this.target.mesh.position.x - this.mesh.position.x;
-    const dy = this.target.mesh.position.y - this.mesh.position.y;
-    const angle = Math.atan2(dy, dx);
-
-    const projectile = new Projectile(
-      this.mesh.position.x,
-      this.mesh.position.y,
-      angle,
-      true // Friendly projectile
-    );
-    projectile.damage = 25;
-
-    game.entities.projectiles.push(projectile);
-    game.scene.add(projectile.mesh);
-    this.lastShotTime = currentTime;
-  }
-
-  // Reuse movement methods from pirate (same logic)
-  moveToward(targetPos, deltaTime, speedMod = 1.0) {
-    const dx = targetPos.x - this.mesh.position.x;
-    const dy = targetPos.y - this.mesh.position.y;
-    const dist = Math.sqrt(dx * dx + dy * dy);
-    
-    if (dist > 1) {
-      this.velocity.x += (dx / dist) * this.maxSpeed * speedMod * deltaTime * 3;
-      this.velocity.y += (dy / dist) * this.maxSpeed * speedMod * deltaTime * 3;
-    }
-    
-    this.mesh.rotation.z = Math.atan2(dy, dx) + Math.PI / 2;
-  }
-
-  moveAwayFrom(targetPos, deltaTime, speedMod = 1.0) {
-    const dx = this.mesh.position.x - targetPos.x;
-    const dy = this.mesh.position.y - targetPos.y;
-    const dist = Math.sqrt(dx * dx + dy * dy);
-    
-    if (dist > 1) {
-      this.velocity.x += (dx / dist) * this.maxSpeed * speedMod * deltaTime * 3;
-      this.velocity.y += (dy / dist) * this.maxSpeed * speedMod * deltaTime * 3;
-      
-      this.mesh.rotation.z = Math.atan2(dy, dx) + Math.PI / 2;
-    }
-  }
-
-  circleTarget(targetPos, deltaTime) {
-    const dx = targetPos.x - this.mesh.position.x;
-    const dy = targetPos.y - this.mesh.position.y;
-    const dist = Math.sqrt(dx * dx + dy * dy);
-    
-    if (dist > 1) {
-      const perpX = -dy / dist;
-      const perpY = dx / dist;
-      
-      this.velocity.x += perpX * this.maxSpeed * deltaTime * 2;
-      this.velocity.y += perpY * this.maxSpeed * deltaTime * 2;
-      
-      this.mesh.rotation.z = Math.atan2(dy, dx) + Math.PI / 2;
-    }
-  }
-
-  reachedTarget(target, threshold) {
-    const dx = target.x - this.mesh.position.x;
-    const dy = target.y - this.mesh.position.y;
-    return Math.sqrt(dx * dx + dy * dy) < threshold;
   }
 
   takeDamage(amount) {
@@ -631,7 +282,7 @@ export class SimplePolice {
   }
 }
 
-// 4. SIMPLE FRIENDLY SHIP - JUST TRADE AND FLEE
+// FRIENDLY SHIP (simplified)  
 export class SimpleFriendlyShip {
   constructor(x, y, allStations, game) {
     this.mesh = this.createMesh();
@@ -642,12 +293,7 @@ export class SimpleFriendlyShip {
     this.maxHealth = 25;
     this.allStations = allStations;
     this.game = game;
-    
-    // SIMPLE STATE MACHINE  
-    this.state = 'TRADE'; // TRADE, FLEE
-    this.target = null;
-    this.fleeTimer = 0;
-    this.attackedRecently = false;
+    this.state = 'TRADE';
   }
 
   createMesh() {
@@ -661,58 +307,9 @@ export class SimpleFriendlyShip {
   }
 
   update(deltaTime) {
-    this.fleeTimer -= deltaTime;
-    
-    // SIMPLE 2-STATE MACHINE
-    switch(this.state) {
-      case 'TRADE':
-        this.doTrading(deltaTime);
-        break;
-      case 'FLEE':
-        this.fleeToSafety(deltaTime);
-        break;
-    }
-
-    // SIMPLE MOVEMENT
     this.velocity.multiplyScalar(0.8);
-    if (this.velocity.length() > this.maxSpeed) {
-      this.velocity.normalize().multiplyScalar(this.maxSpeed);
-    }
     this.mesh.position.x += this.velocity.x * deltaTime;
     this.mesh.position.y += this.velocity.y * deltaTime;
-  }
-
-  doTrading(deltaTime) {
-    // Check for nearby pirates
-    if (this.pirateNearby()) {
-      this.state = 'FLEE';
-      this.fleeTimer = 15; // Flee for 15 seconds
-      this.dropDistressBeacon();
-      return;
-    }
-
-    // Simple trading: just move between random stations
-    if (!this.target || this.reachedTarget(this.target, 20)) {
-      this.target = this.selectRandomStation();
-    }
-    
-    if (this.target) {
-      this.moveToward(this.target, deltaTime, 0.8);
-    }
-  }
-
-  fleeToSafety(deltaTime) {
-    if (this.fleeTimer <= 0) {
-      this.state = 'TRADE';
-      this.attackedRecently = false;
-      return;
-    }
-
-    // Find safest station (furthest from pirates)
-    const safeStation = this.findSafestStation();
-    if (safeStation) {
-      this.moveToward(safeStation.mesh.position, deltaTime, 2.0); // Flee fast!
-    }
   }
 
   pirateNearby() {
@@ -722,61 +319,559 @@ export class SimpleFriendlyShip {
   }
 
   dropDistressBeacon() {
-    // Only drop one beacon per attack
-    if (this.attackedRecently) return;
-    this.attackedRecently = true;
-
     const beacon = new DistressBeacon(this.mesh.position.x, this.mesh.position.y);
-    
-    // Add to game entities
     if (!this.game.entities.distressBeacons) {
       this.game.entities.distressBeacons = [];
     }
     this.game.entities.distressBeacons.push(beacon);
     this.game.scene.add(beacon.mesh);
-    
     if (this.game.ui) {
       this.game.ui.showMessage('Friendly ship under attack! Distress beacon deployed.', 'warning');
     }
   }
 
-  selectRandomStation() {
-    if (this.allStations.length === 0) return null;
-    const station = this.allStations[Math.floor(Math.random() * this.allStations.length)];
-    return station.mesh.position;
+  takeDamage(amount) {
+    this.health -= amount;
+    this.dropDistressBeacon();
+    return this.health <= 0;
   }
+}
 
-  findSafestStation() {
-    if (this.allStations.length === 0) return null;
+// BASIC PLACEHOLDERS
+export class Station {
+  constructor(type, position, resources, prices) {
+    this.type = type;
+    this.position = position;
+    this.resources = resources || { materials: 20, food: 20 };
+    this.prices = prices || {};
+    this.mesh = this.createMesh();
+    this.credits = 1000 + Math.random() * 500;
+    this.orderTimer = 0; // Use accumulated game time instead
+    this.orderCooldown = 10; // Create orders every 10 game seconds (now affected by time scale)
+    this.myOrders = []; // Track orders this station created
+  }
+  
+  createMesh() {
+    const geometry = new THREE.BoxGeometry(5, 5, 5);
+    const material = new THREE.MeshBasicMaterial({ color: this.type === 'mining' ? 0x666666 : 0x336633 });
+    const mesh = new THREE.Mesh(geometry, material);
+    mesh.position.copy(this.position);
+    return mesh;
+  }
+  
+  update(deltaTime, game) {
+    // Consume resources over time
+    this.consumeResources(deltaTime);
     
-    let safest = this.allStations[0];
-    let safestScore = this.calculateSafety(safest);
+    // Produce resources based on type
+    this.produceResources(deltaTime);
     
-    this.allStations.forEach(station => {
-      const safety = this.calculateSafety(station);
-      if (safety > safestScore) {
-        safestScore = safety;
-        safest = station;
+    // Update order timer (now affected by time scale)
+    this.orderTimer += deltaTime;
+    
+    // Create trade orders when needed
+    if (this.orderTimer >= this.orderCooldown) {
+      this.checkAndCreateOrders(game);
+      this.orderTimer = 0; // Reset timer
+    }
+    
+    // Clean up completed orders
+    this.myOrders = this.myOrders.filter(order => 
+      game.availableOrders.includes(order) && !order.completed
+    );
+  }
+  
+  consumeResources(deltaTime) {
+    // Simple consumption - stations use resources slowly
+    if (this.resources.food > 0) {
+      this.resources.food -= deltaTime * 0.1; // Consume 0.1 food per second
+    }
+    if (this.resources.materials > 0 && this.type === 'agricultural') {
+      this.resources.materials -= deltaTime * 0.05; // Agricultural stations use materials
+    }
+  }
+  
+  produceResources(deltaTime) {
+    // Simple production based on station type
+    if (this.type === 'mining' && this.resources.food > 5) {
+      this.resources.materials += deltaTime * 0.2; // Produce materials if fed
+    } else if (this.type === 'agricultural' && this.resources.materials > 5) {
+      this.resources.food += deltaTime * 0.2; // Produce food if supplied
+    }
+    
+    // Generate credits when station is well-supplied (both resources available)
+    if (this.resources.food > 10 && this.resources.materials > 10) {
+      this.credits += deltaTime * 100; // Earn credits when operating efficiently
+    }
+    
+    // Cap resources
+    this.resources.materials = Math.min(100, Math.max(0, this.resources.materials));
+    this.resources.food = Math.min(100, Math.max(0, this.resources.food));
+  }
+  
+  checkAndCreateOrders(game) {
+    // Station-specific order creation based on specialization
+    if (this.type === 'mining') {
+      // Mining stations: BUY food, SELL materials
+      if (this.resources.food < 15 && this.credits > 150) {
+        this.createBuyOrder(game, 'food', 10, 40);
+      }
+      if (this.resources.materials > 80) {
+        this.createSellOrder(game, 'materials', 20, 45);
+      }
+    } else if (this.type === 'agricultural') {
+      // Agricultural stations: BUY materials, SELL food
+      if (this.resources.materials < 15 && this.credits > 200) {
+        this.createBuyOrder(game, 'materials', 10, 50);
+      }
+      if (this.resources.food > 80) {
+        this.createSellOrder(game, 'food', 20, 35);
+      }
+    }
+  }
+  
+  createBuyOrder(game, resourceType, quantity, price) {
+    const order = {
+      id: `${this.name || 'Station'}_${Date.now()}_${Math.random()}`,
+      type: 'buy',
+      resourceType: resourceType,
+      quantity: quantity,
+      price: price,
+      totalValue: quantity * price,
+      station: this,
+      stationName: this.name || 'Unknown Station',
+      created: Date.now(),
+      completed: false,
+      takenBy: null
+    };
+    
+    game.availableOrders.push(order);
+    this.myOrders.push(order);
+    
+    console.log(`📋 ${this.name || 'Station'} created BUY order: ${quantity} ${resourceType} for $${price} each`);
+  }
+  
+  createSellOrder(game, resourceType, quantity, price) {
+    const order = {
+      id: `${this.name || 'Station'}_${Date.now()}_${Math.random()}`,
+      type: 'sell',
+      resourceType: resourceType,
+      quantity: quantity,
+      price: price,
+      totalValue: quantity * price,
+      station: this,
+      stationName: this.name || 'Unknown Station',
+      created: Date.now(),
+      completed: false,
+      takenBy: null
+    };
+    
+    game.availableOrders.push(order);
+    this.myOrders.push(order);
+    
+    console.log(`📋 ${this.name || 'Station'} created SELL order: ${quantity} ${resourceType} for $${price} each`);
+  }
+  
+  // Handle trader interactions
+  sellResourceToTrader(resourceType, quantity) {
+    if (this.resources[resourceType] >= quantity) {
+      this.resources[resourceType] -= quantity;
+      return true;
+    }
+    return false;
+  }
+  
+  buyResourceFromTrader(resourceType, quantity) {
+    this.resources[resourceType] += quantity;
+    return true;
+  }
+}
+
+export class TradingShip {
+  constructor(position, stations) {
+    this.position = position;
+    this.mesh = this.createMesh();
+    this.mesh.position.copy(position);
+    this.credits = 1000 + Math.random() * 500;
+    this.cargo = { materials: 0, food: 0 };
+    this.maxCargo = 20;
+    this.stations = stations || [];
+    
+    // AI State
+    this.state = 'SEEKING_ORDER'; // SEEKING_ORDER, SOURCING, TRAVELING_TO_PICKUP, PICKING_UP, TRAVELING_TO_DELIVERY, DELIVERING
+    this.currentOrder = null;
+    this.sourceOrder = null; // For when we need to source goods for a BUY order
+    this.target = null;
+    this.velocity = new THREE.Vector2(0, 0);
+    this.maxSpeed = 18;
+    this.actionTimer = 0;
+    this.stateTimer = 0; // Track how long we've been in current state
+    this.maxStateTime = 8; // Force action after 15 seconds
+  }
+  
+  createMesh() {
+    const geometry = new THREE.ConeGeometry(1, 3, 6);
+    const material = new THREE.MeshBasicMaterial({ color: 0x00aaaa });
+    const mesh = new THREE.Mesh(geometry, material);
+    return mesh;
+  }
+  
+  update(deltaTime, game) {
+    this.actionTimer -= deltaTime;
+    this.stateTimer += deltaTime;
+    
+    // Timeout protection - only for states where ships can get stuck
+    const timeoutStates = ['SEEKING_ORDER', 'PICKING_UP'];
+    if (timeoutStates.includes(this.state) && this.stateTimer > this.maxStateTime) {
+      console.log(`⏰ Trader timeout in state ${this.state}, forcing reset`);
+      this.forceReset();
+    }
+    
+    switch(this.state) {
+      case 'SEEKING_ORDER':
+        this.seekOrder(game);
+        break;
+      case 'TRAVELING_TO_PICKUP':
+        this.travelToPickup(deltaTime);
+        break;
+      case 'PICKING_UP':
+        this.handlePickup(game);
+        break;
+      case 'TRAVELING_TO_DELIVERY':
+        this.travelToDelivery(deltaTime);
+        break;
+      case 'DELIVERING':
+        this.handleDelivery(game);
+        break;
+    }
+    
+    // Apply movement
+    this.velocity.multiplyScalar(0.85);
+    if (this.velocity.length() > this.maxSpeed) {
+      this.velocity.normalize().multiplyScalar(this.maxSpeed);
+    }
+    this.mesh.position.x += this.velocity.x * deltaTime;
+    this.mesh.position.y += this.velocity.y * deltaTime;
+  }
+  
+  forceReset() {
+    console.log(`🔄 Trader force reset - was in ${this.state} with cargo: M:${this.cargo.materials} F:${this.cargo.food}`);
+    this.resetToSeeking();
+  }
+  
+  resetToSeeking() {
+    this.abandonOrder({ availableOrders: [] });
+    this.stateTimer = 0;
+  }
+  
+  setState(newState) {
+    if (this.state !== newState) {
+      console.log(`🔄 Trader state: ${this.state} → ${newState}`);
+      this.state = newState;
+      this.stateTimer = 0;
+    }
+  }
+  
+  seekOrder(game) {
+    if (!game.availableOrders || game.availableOrders.length === 0) {
+      this.moveToOtherStation();
+      return;
+    }
+    
+    // Find best order to fulfill
+    const viableOrders = game.availableOrders.filter(order => 
+      !order.takenBy && !order.completed && this.canHandleOrder(order)
+    );
+    
+    if (viableOrders.length === 0) {
+      this.moveToOtherStation();
+      return;
+    }
+    
+    // Pick closest order
+    let bestOrder = null;
+    let bestDistance = Infinity;
+    
+    viableOrders.forEach(order => {
+      const distance = this.mesh.position.distanceTo(order.station.mesh.position);
+      if (distance < bestDistance) {
+        bestDistance = distance;
+        bestOrder = order;
       }
     });
     
-    return safest;
+    if (bestOrder) {
+      this.takeOrder(bestOrder);
+      console.log(`🚛 Trader taking order: ${bestOrder.type} ${bestOrder.quantity} ${bestOrder.resourceType} from ${bestOrder.stationName}`);
+    }
   }
-
-  calculateSafety(station) {
-    let safety = 100;
-    
-    // Penalty for each nearby pirate
-    this.game.entities.pirates.forEach(pirate => {
-      const dist = pirate.mesh.position.distanceTo(station.mesh.position);
-      if (dist < 100) {
-        safety -= (100 - dist); // Closer pirates = less safe
+  
+  moveToOtherStation() {
+    if (this.stations.length >= 2) {
+      // Find station that's not our current target
+      const otherStation = this.stations.find(station => {
+        const distance = this.mesh.position.distanceTo(station.mesh.position);
+        return distance > 50; // Far enough to be the other station
+      });
+      
+      if (otherStation) {
+        this.target = otherStation;
+        this.state = 'TRAVELING_TO_PICKUP';
+        this.stateTimer = 0;
       }
-    });
-    
-    return safety;
+    }
   }
-
+  
+  canHandleOrder(order) {
+    if (order.type === 'buy') {
+      // For buy orders, check if we already have the resource
+      if (this.cargo[order.resourceType] >= order.quantity) {
+        return true; // We can fulfill immediately
+      }
+      // If we don't have it, check if we have space to source it
+      return (this.cargo.materials + this.cargo.food + order.quantity) <= this.maxCargo;
+    } else {
+      // For sell orders, we need credits and cargo space
+      return this.credits >= order.totalValue && 
+             (this.cargo.materials + this.cargo.food + order.quantity) <= this.maxCargo;
+    }
+  }
+  
+  takeOrder(order) {
+    this.currentOrder = order;
+    order.takenBy = this;
+    
+    if (order.type === 'sell') {
+      // For sell orders, we go to pick up from the station
+      this.target = order.station;
+      this.state = 'TRAVELING_TO_PICKUP';
+    } else {
+      // For buy orders, check if we already have the resource
+      if (this.cargo[order.resourceType] >= order.quantity) {
+        // We have the resource, go deliver directly
+        this.target = order.station;
+        this.state = 'TRAVELING_TO_DELIVERY';
+      } else {
+        // We need to source the resource first
+        this.findSourceForBuyOrder(order);
+      }
+    }
+  }
+  
+  findSourceForBuyOrder(buyOrder) {
+    // Look for SELL orders for the same resource
+    const sellOrders = this.stations.filter(station => 
+      station.resources[buyOrder.resourceType] > buyOrder.quantity
+    );
+    
+    if (sellOrders.length > 0) {
+      // Find closest station with the resource
+      let closestStation = null;
+      let closestDistance = Infinity;
+      
+      sellOrders.forEach(station => {
+        const distance = this.mesh.position.distanceTo(station.mesh.position);
+        if (distance < closestDistance) {
+          closestDistance = distance;
+          closestStation = station;
+        }
+      });
+      
+      if (closestStation) {
+        this.target = closestStation;
+        this.state = 'TRAVELING_TO_PICKUP';
+        console.log(`🔍 Trader sourcing ${buyOrder.quantity} ${buyOrder.resourceType} from ${closestStation.name || 'Station'} for delivery to ${buyOrder.stationName}`);
+      } else {
+        // No source found, abandon order
+        this.abandonOrder({ availableOrders: [] });
+      }
+    } else {
+      // No stations have the resource, abandon order
+      this.abandonOrder({ availableOrders: [] });
+    }
+  }
+  
+  travelToPickup(deltaTime) {
+    if (!this.target || !this.currentOrder) {
+      this.state = 'SEEKING_ORDER';
+      return;
+    }
+    
+    const distance = this.mesh.position.distanceTo(this.target.mesh.position);
+    
+    if (distance < 15) {
+      this.state = 'PICKING_UP';
+      this.actionTimer = 0.5; // 0.5 seconds to load cargo
+      this.velocity.set(0, 0);
+    } else {
+      this.moveToward(this.target.mesh.position, deltaTime);
+    }
+  }
+  
+  handlePickup(game) {
+    if (this.actionTimer > 0) return; // Still loading
+    
+    const order = this.currentOrder;
+    if (!order) {
+      this.state = 'SEEKING_ORDER';
+      return;
+    }
+    
+    if (order.type === 'sell') {
+      // Handling pickup for SELL orders (traditional approach)
+      if (order.station.sellResourceToTrader(order.resourceType, order.quantity)) {
+        this.cargo[order.resourceType] += order.quantity;
+        console.log(`📦 Trader picked up ${order.quantity} ${order.resourceType} from ${order.stationName}`);
+        
+        // Now find a station that wants this resource
+        this.findBuyerStation(game);
+      } else {
+        // Station doesn't have the resource, abandon order
+        console.log(`❌ Station ${order.stationName} couldn't provide ${order.resourceType}`);
+        this.abandonOrder(game);
+      }
+    } else if (order.type === 'buy') {
+      // Handling pickup for BUY orders (sourcing goods to fulfill contract)
+      if (this.target.sellResourceToTrader(order.resourceType, order.quantity)) {
+        this.cargo[order.resourceType] += order.quantity;
+        console.log(`📦 Trader sourced ${order.quantity} ${order.resourceType} from ${this.target.name || 'Station'} for delivery to ${order.stationName}`);
+        
+        // Now go deliver to the original BUY order station
+        this.target = order.station;
+        this.state = 'TRAVELING_TO_DELIVERY';
+      } else {
+        // Source station doesn't have the resource, abandon order
+        console.log(`❌ Source station couldn't provide ${order.resourceType} for ${order.stationName}`);
+        this.abandonOrder(game);
+      }
+    }
+  }
+  
+  findBuyerStation(game) {
+    // Look for a buy order for the same resource type
+    const buyOrders = game.availableOrders.filter(order => 
+      order.type === 'buy' && 
+      order.resourceType === this.currentOrder.resourceType &&
+      !order.takenBy && 
+      !order.completed
+    );
+    
+    if (buyOrders.length > 0) {
+      // Find the highest paying buyer
+      const bestBuyer = buyOrders.reduce((best, order) => 
+        order.price > best.price ? order : best
+      );
+      
+      this.target = bestBuyer.station;
+      bestBuyer.takenBy = this;
+      this.deliveryOrder = bestBuyer;
+      this.state = 'TRAVELING_TO_DELIVERY';
+      
+      console.log(`🎯 Trader found buyer: ${bestBuyer.stationName} wants ${bestBuyer.quantity} ${bestBuyer.resourceType} for $${bestBuyer.price} each`);
+    } else {
+      // No buyer found, find any station that might want it
+      const needyStations = this.stations.filter(station => 
+        station.resources[this.currentOrder.resourceType] < 30
+      );
+      
+      if (needyStations.length > 0) {
+        this.target = needyStations[0];
+        this.state = 'TRAVELING_TO_DELIVERY';
+      } else {
+        // No one wants it, abandon
+        this.abandonOrder(game);
+      }
+    }
+  }
+  
+  travelToDelivery(deltaTime) {
+    if (!this.target) {
+      this.state = 'SEEKING_ORDER';
+      return;
+    }
+    
+    const distance = this.mesh.position.distanceTo(this.target.mesh.position);
+    
+    if (distance < 15) {
+      this.state = 'DELIVERING';
+      this.actionTimer = 2.0; // 2 seconds to unload cargo
+      this.velocity.set(0, 0);
+    } else {
+      this.moveToward(this.target.mesh.position, deltaTime);
+    }
+  }
+  
+  handleDelivery(game) {
+    if (this.actionTimer > 0) return; // Still unloading
+    
+    const order = this.currentOrder;
+    if (!order) {
+      this.state = 'SEEKING_ORDER';
+      return;
+    }
+    
+    if (order.type === 'buy') {
+      // Delivering to a buy order
+      if (this.cargo[order.resourceType] >= order.quantity && order.station.credits >= order.totalValue) {
+        this.cargo[order.resourceType] -= order.quantity;
+        order.station.buyResourceFromTrader(order.resourceType, order.quantity);
+        this.credits += order.totalValue;
+        order.station.credits -= order.totalValue;
+        
+        console.log(`💰 Trader sold ${order.quantity} ${order.resourceType} to ${order.stationName} for $${order.totalValue}`);
+        this.completeOrder(game, order);
+      } else {
+        console.log(`❌ Couldn't complete sale to ${order.stationName}`);
+        this.abandonOrder(game);
+      }
+    } else {
+      // Delivering after pickup (selling to a buyer)
+      const deliveryOrder = this.deliveryOrder;
+      if (deliveryOrder && this.cargo[deliveryOrder.resourceType] >= deliveryOrder.quantity) {
+        this.cargo[deliveryOrder.resourceType] -= deliveryOrder.quantity;
+        deliveryOrder.station.buyResourceFromTrader(deliveryOrder.resourceType, deliveryOrder.quantity);
+        this.credits += deliveryOrder.totalValue;
+        deliveryOrder.station.credits -= deliveryOrder.totalValue;
+        
+        console.log(`💰 Trader delivered ${deliveryOrder.quantity} ${deliveryOrder.resourceType} to ${deliveryOrder.stationName} for $${deliveryOrder.totalValue}`);
+        this.completeOrder(game, deliveryOrder);
+      }
+      
+      // Also complete the original sell order
+      this.completeOrder(game, order);
+    }
+  }
+  
+  completeOrder(game, order) {
+    order.completed = true;
+    order.takenBy = null;
+    
+    // Remove completed order from available orders
+    const index = game.availableOrders.indexOf(order);
+    if (index > -1) {
+      game.availableOrders.splice(index, 1);
+    }
+    
+    this.currentOrder = null;
+    this.deliveryOrder = null;
+    this.target = null;
+    this.state = 'SEEKING_ORDER';
+  }
+  
+  abandonOrder(game) {
+    if (this.currentOrder) {
+      this.currentOrder.takenBy = null;
+    }
+    if (this.deliveryOrder) {
+      this.deliveryOrder.takenBy = null;
+    }
+    
+    this.currentOrder = null;
+    this.deliveryOrder = null;
+    this.target = null;
+    this.state = 'SEEKING_ORDER';
+  }
+  
   moveToward(targetPos, deltaTime, speedMod = 1.0) {
     const dx = targetPos.x - this.mesh.position.x;
     const dy = targetPos.y - this.mesh.position.y;
@@ -789,56 +884,26 @@ export class SimpleFriendlyShip {
     
     this.mesh.rotation.z = Math.atan2(dy, dx) + Math.PI / 2;
   }
-
-  reachedTarget(target, threshold) {
-    const dx = target.x - this.mesh.position.x;
-    const dy = target.y - this.mesh.position.y;
-    return Math.sqrt(dx * dx + dy * dy) < threshold;
-  }
-
-  takeDamage(amount) {
-    this.health -= amount;
-    
-    // If not already fleeing, start fleeing
-    if (this.state !== 'FLEE') {
-      this.state = 'FLEE';
-      this.fleeTimer = 20;
-      this.dropDistressBeacon();
-    }
-    
-    return this.health <= 0;
+  
+  getCargoString() { 
+    return `M:${this.cargo.materials} F:${this.cargo.food}`;
   }
 }
 
 export class Projectile {
-  constructor(x, y, angle, isPlayerProjectile, weaponLevel = 1, isMainShot = true) {
-    this.mesh = this.createMesh(isPlayerProjectile, weaponLevel, isMainShot);
+  constructor(x, y, angle, isPlayerProjectile, weaponLevel = 1) {
+    this.mesh = this.createMesh(isPlayerProjectile, weaponLevel);
     this.mesh.position.set(x, y, 0);
-    const baseSpeed = 60;
-    const speed = baseSpeed + (weaponLevel - 1) * 5; 
-    this.velocity = new THREE.Vector2(
-      Math.cos(angle) * speed,
-      Math.sin(angle) * speed
-    );
-    this.life = 2.0 + (weaponLevel - 1) * 0.2;
+    const speed = 60;
+    this.velocity = new THREE.Vector2(Math.cos(angle) * speed, Math.sin(angle) * speed);
+    this.life = 2.0;
     this.isPlayerProjectile = isPlayerProjectile;
-    this.weaponLevel = weaponLevel;
+    this.damage = isPlayerProjectile ? 20 : 15;
   }
 
-  createMesh(isPlayerProjectile, weaponLevel, isMainShot) {
-    let size = 0.2;
-    let color = 0x00ff44;
-    if (isPlayerProjectile) {
-      size = 0.2 + (weaponLevel -1) * 0.05;
-      if (!isMainShot) size *= 0.7;
-      if (weaponLevel === 1) color = 0x00dd88;
-      else if (weaponLevel === 2) color = 0x00ffff;
-      else if (weaponLevel === 3) color = 0xffee00;
-      else color = 0xff8800;
-    } else {
-      color = 0xff4400;
-      size = 0.25;
-    }
+  createMesh(isPlayerProjectile, weaponLevel) {
+    const size = 0.2 + (weaponLevel - 1) * 0.05;
+    const color = isPlayerProjectile ? 0x00dd88 : 0xff4400;
     const geometry = new THREE.SphereGeometry(size, 6, 6);
     const material = new THREE.MeshBasicMaterial({ color: color });
     return new THREE.Mesh(geometry, material);
@@ -856,30 +921,14 @@ export class Asteroid {
     this.size = size;
     this.mesh = this.createMesh();
     this.mesh.position.set(x, y, 0);
-    
-    // ONLY AI MINER MINING SYSTEM NOW
-    this.maxOre = Math.floor(size * 10); // Bigger asteroids = more ore (5-40 ore range)
-    this.currentOre = this.maxOre;       // Start full of ore for AI miners
-    this.aiDepleted = false;             // Track if depleted by AI miners
-    
+    this.maxOre = Math.floor(size * 10);
+    this.currentOre = this.maxOre;
     this.rotationSpeed = (Math.random() - 0.5) * 0.01;
-    this.mesh.rotation.x = Math.random() * Math.PI * 2;
-    this.mesh.rotation.y = Math.random() * Math.PI * 2;
   }
 
   createMesh() {
     const geometry = new THREE.IcosahedronGeometry(this.size, 0);
-    const positionAttribute = geometry.getAttribute('position');
-    for (let i = 0; i < positionAttribute.count; i++) {
-      const vertex = new THREE.Vector3().fromBufferAttribute(positionAttribute, i);
-      const displacement = Math.random() * this.size * 0.3;
-      vertex.normalize().multiplyScalar(this.size + displacement);
-      positionAttribute.setXYZ(i, vertex.x, vertex.y, vertex.z);
-    }
-    geometry.computeVertexNormals();
-    
-    const color = new THREE.Color(0x888888).lerp(new THREE.Color(0x444444), Math.random());
-    const material = new THREE.MeshBasicMaterial({ color: color });
+    const material = new THREE.MeshBasicMaterial({ color: 0x888888 });
     return new THREE.Mesh(geometry, material);
   }
 
@@ -889,1453 +938,62 @@ export class Asteroid {
 }
 
 export class JumpGate {
-  constructor(x, y, targetZoneId, destinationName, CSS2DObjectConstructor) {
+  constructor(x, y, targetZoneId, destinationName) {
     this.targetZoneId = targetZoneId;
     this.destinationName = destinationName;
     this.interactionRadius = 20;
     this.mesh = this.createMesh();
     this.mesh.position.set(x, y, 0);
-    this.label = this.createLabel(CSS2DObjectConstructor);
-    this.mesh.add(this.label);
     this.animationTime = 0;
   }
 
   createMesh() {
     const group = new THREE.Group();
-    
-    // Main ring
     const ringGeometry = new THREE.TorusGeometry(8, 1, 8, 16);
-    const ringMaterial = new THREE.MeshBasicMaterial({ color: 0x00ffff });
+    const ringMaterial = new THREE.MeshBasicMaterial({ color: 0x00ccff });
     const ring = new THREE.Mesh(ringGeometry, ringMaterial);
-    ring.rotation.x = Math.PI / 2;
     group.add(ring);
-    
-    // Inner energy field
-    const fieldGeometry = new THREE.CircleGeometry(7, 16);
-    const fieldMaterial = new THREE.MeshBasicMaterial({ 
-      color: 0x0088ff, 
-      transparent: true, 
-      opacity: 0.3 
-    });
-    const field = new THREE.Mesh(fieldGeometry, fieldMaterial);
-    group.add(field);
-    
     return group;
-  }
-
-  createLabel(CSS2DObjectConstructor) {
-    const div = document.createElement('div');
-    div.className = 'jumpgate-label';
-    div.innerHTML = `JUMP GATE<br><span style="font-size: 0.8em; color: #00ffff;">TO ${this.destinationName.toUpperCase()}</span>`;
-    div.style.fontFamily = "'Lucida Console', 'Courier New', monospace";
-    div.style.color = '#00ffff';
-    div.style.fontSize = '12px';
-    div.style.textAlign = 'center';
-    div.style.textShadow = '1px 1px 1px rgba(0,0,0,0.7)';
-    div.style.backgroundColor = 'rgba(0, 40, 40, 0.5)';
-    div.style.padding = '2px 4px';
-    div.style.border = '1px solid rgba(0,255,255,0.3)';
-    div.style.borderRadius = '2px';
-    
-    const label = new CSS2DObjectConstructor(div);
-    label.position.set(0, 10, 0);
-    return label;
   }
 
   update(deltaTime) {
     this.animationTime += deltaTime;
     this.mesh.rotation.z += deltaTime * 0.5;
-    
-    // Pulse the inner field
-    const field = this.mesh.children[1];
-    if (field) {
-      field.material.opacity = 0.2 + Math.sin(this.animationTime * 2) * 0.1;
-    }
   }
 }
 
-export class MiningShip {
-  constructor(x, y, asteroids, homeStation) {
-    this.mesh = this.createMesh();
-    this.mesh.position.set(x, y, 0);
-    this.velocity = new THREE.Vector2(0, 0);
-    this.maxSpeed = 12;
-    this.health = 40;
-    this.asteroids = asteroids;
-    this.homeStation = homeStation;
-    this.state = 'SEEKING'; // SEEKING, MINING, RETURNING
-    this.target = null;
-    this.cargo = 0;
-    this.maxCargo = 5;
-    this.miningTimer = 0;
-  }
-
-  createMesh() {
-    const group = new THREE.Group();
-    const hullGeometry = new THREE.BoxGeometry(2, 1.5, 0.8);
-    const hullMaterial = new THREE.MeshBasicMaterial({ color: 0xffaa00 });
-    const hull = new THREE.Mesh(hullGeometry, hullMaterial);
-    group.add(hull);
-    
-    // Mining equipment
-    const drillGeometry = new THREE.CylinderGeometry(0.2, 0.3, 1, 6);
-    const drillMaterial = new THREE.MeshBasicMaterial({ color: 0x888888 });
-    const drill = new THREE.Mesh(drillGeometry, drillMaterial);
-    drill.position.set(1.2, 0, 0);
-    drill.rotation.z = Math.PI / 2;
-    group.add(drill);
-    
-    return group;
-  }
-
-  update(deltaTime) {
-    // Simple mining ship AI - placeholder for now
-    this.velocity.multiplyScalar(0.9);
-    if (this.velocity.length() > this.maxSpeed) {
-      this.velocity.normalize().multiplyScalar(this.maxSpeed);
-    }
-    this.mesh.position.x += this.velocity.x * deltaTime;
-    this.mesh.position.y += this.velocity.y * deltaTime;
-  }
-}
-
-export class PirateStation {
-  constructor(x, y, CSS2DObjectConstructor) {
-    this.mesh = this.createMesh();
-    this.mesh.position.set(x, y, 0);
-    this.health = 200;
-    this.maxHealth = 200;
-    this.lastSpawnTime = 0;
-    this.spawnCooldown = 30000; // 30 seconds
-    this.label = this.createLabel(CSS2DObjectConstructor);
-    this.mesh.add(this.label);
-  }
-
-  createMesh() {
-    const group = new THREE.Group();
-    
-    // Main structure - more menacing than regular stations
-    const coreGeometry = new THREE.BoxGeometry(4, 4, 2);
-    const coreMaterial = new THREE.MeshBasicMaterial({ color: 0x440000 });
-    const core = new THREE.Mesh(coreGeometry, coreMaterial);
-    group.add(core);
-    
-    // Weapon turrets
-    for (let i = 0; i < 4; i++) {
-      const turretGeometry = new THREE.CylinderGeometry(0.5, 0.8, 1, 6);
-      const turretMaterial = new THREE.MeshBasicMaterial({ color: 0x660000 });
-      const turret = new THREE.Mesh(turretGeometry, turretMaterial);
-      const angle = (i / 4) * Math.PI * 2;
-      turret.position.set(Math.cos(angle) * 3, Math.sin(angle) * 3, 1);
-      group.add(turret);
-    }
-    
-    // Red warning lights
-    const lightGeometry = new THREE.SphereGeometry(0.3, 6, 6);
-    const lightMaterial = new THREE.MeshBasicMaterial({ color: 0xff0000 });
-    for (let i = 0; i < 6; i++) {
-      const light = new THREE.Mesh(lightGeometry, lightMaterial);
-      const angle = (i / 6) * Math.PI * 2;
-      light.position.set(Math.cos(angle) * 2.5, Math.sin(angle) * 2.5, 1.5);
-      group.add(light);
-    }
-    
-    return group;
-  }
-
-  createLabel(CSS2DObjectConstructor) {
-    const div = document.createElement('div');
-    div.className = 'pirate-station-label';
-    div.innerHTML = `PIRATE OUTPOST<br><span style="font-size: 0.7em; color: #ff6666;">HOSTILE TERRITORY</span>`;
-    div.style.fontFamily = "'Lucida Console', 'Courier New', monospace";
-    div.style.color = '#ff4444';
-    div.style.fontSize = '12px';
-    div.style.textAlign = 'center';
-    div.style.textShadow = '1px 1px 1px rgba(0,0,0,0.7)';
-    div.style.backgroundColor = 'rgba(40, 0, 0, 0.5)';
-    div.style.padding = '2px 4px';
-    div.style.border = '1px solid rgba(255,0,0,0.3)';
-    div.style.borderRadius = '2px';
-    
-    const label = new CSS2DObjectConstructor(div);
-    label.position.set(0, 6, 0);
-    return label;
-  }
-
-  update(deltaTime, game) {
-    // Spawn pirates periodically
-    const currentTime = Date.now();
-    if (currentTime - this.lastSpawnTime > this.spawnCooldown) {
-      this.spawnPirate(game);
-      this.lastSpawnTime = currentTime;
-    }
-  }
-
-  spawnPirate(game) {
-    const angle = Math.random() * Math.PI * 2;
-    const distance = 15 + Math.random() * 10;
-    const x = this.mesh.position.x + Math.cos(angle) * distance;
-    const y = this.mesh.position.y + Math.sin(angle) * distance;
-    
-    // Spawn pirate with homeStation reference for enhanced AI
-    const pirate = new SimplePirate(x, y);
-    game.entities.pirates.push(pirate);
-    game.scene.add(pirate.mesh);
-    
-    if (game.ui) {
-      game.ui.showMessage('Pirate station launched raider!', 'warning');
-    }
-  }
-}
-
-// REMOVED: SimpleStation class - functionality moved into SimpleStationWithTrading
-
-// SIMPLE ZONE ECONOMY BALANCER
-export class SimpleZoneEconomy {
-  static balanceZoneEconomy(stations, deltaTime) {
-    // Simple zone-wide economic pressure
-    const totalMaterials = stations.reduce((sum, station) => sum + station.materials, 0);
-    const totalGoods = stations.reduce((sum, station) => sum + station.producedGoods, 0);
-    const avgMaterials = totalMaterials / stations.length;
-    const avgGoods = totalGoods / stations.length;
-    
-    // If zone is running low on materials, encourage material gathering
-    // If zone has excess goods, encourage goods trading
-    // This could affect prices or spawn trader ships
-    
-    return {
-      materialScarcity: avgMaterials < 8, // Zone needs more materials
-      goodsScarcity: avgGoods < 5,        // Zone needs more goods  
-      avgMaterials: avgMaterials,
-      avgGoods: avgGoods
+// ECONOMIC ENGINE (placeholder for compatibility)
+export class EconomicEngine {
+  constructor() {
+    this.priceMultipliers = {
+      food: 1.0,
+      materials: 1.0
     };
   }
-}
-
-// SIMPLE TRADER AI - Moves materials/goods between stations
-export class SimpleTrader {
-  constructor(x, y, stations, game) {
-    this.mesh = this.createMesh();
-    this.mesh.position.set(x, y, 0);
-    this.velocity = new THREE.Vector2(0, 0);
-    this.maxSpeed = 18;
-    this.stations = stations;
-    this.game = game;
-    
-    // SIMPLE CARGO
-    this.materials = 0;
-    this.goods = 0;
-    this.maxCargo = 8;
-    
-    // CREDITS FOR TRADING - CRITICAL FIX!
-    this.credits = 1000 + Math.floor(Math.random() * 500); // Start with 1000-1500 credits
-    
-    // AI STATE
-    this.state = 'SEEKING'; // SEEKING, TRAVELING, TRADING
-    this.target = null;
-    this.tradeType = null; // 'materials' or 'goods'
-    this.actionCooldown = 0; // Prevent rapid trading loops
-    
-    // DOCKING SYSTEM
-    this.docked = false;
-    this.dockedStation = null;
-    this.dockTime = 0;
-    this.minDockTime = 5.0; // Minimum 5 seconds docked
-    this.maxDockTime = 10.0; // Maximum 10 seconds docked
-  }
-
-  createMesh() {
-    const group = new THREE.Group();
-    const hullGeometry = new THREE.BoxGeometry(2, 1.5, 0.8);
-    const hullMaterial = new THREE.MeshBasicMaterial({ color: 0x00aaaa });
-    const hull = new THREE.Mesh(hullGeometry, hullMaterial);
-    group.add(hull);
-    return group;
-  }
-
-  update(deltaTime) {
-    // Handle docking time
-    if (this.docked) {
-      this.dockTime -= deltaTime;
-      
-      if (this.dockTime <= 0) {
-        this.undockFromStation();
-      } else {
-        // While docked, try to trade
-        this.handleDockedTrading();
-        return; // Don't move while docked
-      }
-    }
-
-    // Update cooldown timer
-    if (this.actionCooldown > 0) {
-      this.actionCooldown -= deltaTime;
-    }
-
-    // Rest of existing update logic for non-docked ships
-    switch(this.state) {
-      case 'SEEKING':
-        this.seekTradingOpportunity();
-        break;
-      case 'TRAVELING':
-        this.travelToTarget(deltaTime);
-        break;
-      case 'TRADING':
-        this.arriveAtStation(); // Modified to handle docking
-        break;
-    }
-
-    // Apply movement (only if not docked)
-    if (!this.docked) {
-      this.velocity.multiplyScalar(0.85);
-      if (this.velocity.length() > this.maxSpeed) {
-        this.velocity.normalize().multiplyScalar(this.maxSpeed);
-      }
-      this.mesh.position.x += this.velocity.x * deltaTime;
-      this.mesh.position.y += this.velocity.y * deltaTime;
-    }
-  }
-
-  seekTradingOpportunity() {
-    // Skip seeking while on cooldown
-    if (this.actionCooldown > 0) return;
-    
-    // Find best trade opportunity
-    const opportunities = [];
-    
-    this.stations.forEach(station => {
-      const status = station.getEconomicStatus();
-      
-      // If we have materials, find stations that need them
-      if (this.materials > 0 && status.needsMaterials) {
-        opportunities.push({
-          station: station,
-          type: 'sell_materials',
-          priority: (10 - status.materials) * 2 // Higher priority for stations with fewer materials
-        });
-      }
-      
-      // If we have goods, find stations that need them  
-      if (this.goods > 0 && status.needsGoods) {
-        opportunities.push({
-          station: station,
-          type: 'sell_goods',
-          priority: (8 - status.goods) * 3 // Higher priority for stations with fewer goods
-        });
-      }
-      
-      // If we have cargo space, find stations with excess
-      if (this.materials + this.goods < this.maxCargo) {
-        if (status.materials > 15) {
-          opportunities.push({
-            station: station,
-            type: 'buy_materials',
-            priority: status.materials
-          });
-        }
-        if (status.goods > 10) {
-          opportunities.push({
-            station: station,
-            type: 'buy_goods', 
-            priority: status.goods
-          });
-        }
-      }
-    });
-
-    if (opportunities.length > 0) {
-      // Pick best opportunity
-      opportunities.sort((a, b) => b.priority - a.priority);
-      const best = opportunities[0];
-      
-      this.target = best.station;
-      this.tradeType = best.type;
-      this.state = 'TRAVELING';
-    }
-  }
-
-  travelToTarget(deltaTime) {
-    if (!this.target) {
-      this.state = 'SEEKING';
-      return;
-    }
-
-    const dx = this.target.mesh.position.x - this.mesh.position.x;
-    const dy = this.target.mesh.position.y - this.mesh.position.y;
-    const distance = Math.sqrt(dx * dx + dy * dy);
-
-    if (distance < 15) {
-      this.state = 'TRADING';
-      this.velocity.set(0, 0);
-    } else {
-      this.velocity.x += (dx / distance) * this.maxSpeed * deltaTime * 2;
-      this.velocity.y += (dy / distance) * this.maxSpeed * deltaTime * 2;
-      
-      this.mesh.rotation.z = Math.atan2(dy, dx) + Math.PI / 2;
-    }
-  }
-
-  // NEW: Handle arrival at station (replaces old performTrade)
-  arriveAtStation() {
-    if (!this.target || !this.tradeType) {
-      this.state = 'SEEKING';
-      return;
-    }
-
-    // Dock at the station
-    this.dockAtStation(this.target);
-  }
-
-  // NEW: Dock at station
-  dockAtStation(station) {
-    // DEBUG: Check if docking is happening
-    console.log(`TRADER DOCKED: ${this.mesh.uuid.slice(0,4)} at ${station.name} with ${this.credits || 'undefined'} credits`);
-    console.log(`Planned trade: ${this.tradeType}, Cargo: materials=${this.materials}, goods=${this.goods}`);
-    
-    this.docked = true;
-    this.dockedStation = station;
-    this.dockTime = this.minDockTime + Math.random() * (this.maxDockTime - this.minDockTime);
-    
-    // Move ship to station position (visual docking)
-    this.mesh.position.copy(station.mesh.position);
-    this.velocity.set(0, 0);
-    
-    // Log docking
-    if (this.game.eventLogger) {
-      this.game.eventLogger.logEconomic(
-        `Trader ${this.mesh.uuid.slice(0, 8)} docked at ${station.name} (${this.dockTime.toFixed(1)}s)`,
-        { 
-          trader: this.mesh.uuid.slice(0, 8),
-          station: station.name,
-          action: 'dock',
-          cargo: { materials: this.materials, goods: this.goods },
-          plannedTrade: this.tradeType
-        }
-      );
-    }
-  }
-
-  // NEW: Handle trading while docked - WITH ACTUAL CREDIT EXCHANGE!
-  handleDockedTrading() {
-    if (!this.dockedStation || !this.tradeType) return;
-
-    // DEBUG: Check if trading even happens
-    console.log(`TRADING ATTEMPT: ${this.tradeType} - Trader has ${this.credits || 'undefined'} credits, Station has ${this.dockedStation.credits}`);
-
-    // DEBUG LOGGING
-    console.log(`BEFORE TRADE: Trader credits=${this.credits}, Station credits=${this.dockedStation.credits}`);
-
-    // Perform the planned trade
-    let tradeSuccess = false;
-    const tradeQuantity = Math.min(3, this.maxCargo);
-
-    switch(this.tradeType) {
-      case 'sell_materials':
-        if (this.materials > 0 && this.dockedStation.canBuyMaterials(tradeQuantity)) {
-          const actualQuantity = Math.min(this.materials, tradeQuantity);
-          const pricePerUnit = Math.floor(this.dockedStation.getMaterialPrice() * 0.8); // Trader gets 80% of station price
-          const totalPayment = pricePerUnit * actualQuantity;
-          
-          // ACTUAL CREDIT EXCHANGE
-          if (this.dockedStation.credits >= totalPayment) {
-            this.materials -= actualQuantity;
-            this.dockedStation.buyMaterials(actualQuantity);
-            this.dockedStation.credits -= totalPayment;  // Station pays
-            this.credits += totalPayment;                // Trader receives
-            tradeSuccess = true;
-            
-            if (this.game.eventLogger) {
-              this.game.eventLogger.logEconomic(
-                `Trader ${this.mesh.uuid.slice(0, 8)} sold ${actualQuantity} materials to ${this.dockedStation.name} for $${totalPayment}`,
-                { trader: this.mesh.uuid.slice(0, 8), action: 'sell', item: 'materials', quantity: actualQuantity, payment: totalPayment }
-              );
-            }
-          }
-        }
-        break;
-        
-      case 'sell_goods':
-        if (this.goods > 0 && this.dockedStation.canBuyGoods(tradeQuantity)) {
-          const actualQuantity = Math.min(this.goods, tradeQuantity);
-          const pricePerUnit = Math.floor(this.dockedStation.getGoodsPrice() * 0.9); // Trader gets 90% of station price
-          const totalPayment = pricePerUnit * actualQuantity;
-          
-          // ACTUAL CREDIT EXCHANGE
-          if (this.dockedStation.credits >= totalPayment) {
-            this.goods -= actualQuantity;
-            this.dockedStation.buyGoods(actualQuantity);
-            this.dockedStation.credits -= totalPayment;  // Station pays
-            this.credits += totalPayment;                // Trader receives
-            tradeSuccess = true;
-            
-            if (this.game.eventLogger) {
-              this.game.eventLogger.logEconomic(
-                `Trader ${this.mesh.uuid.slice(0, 8)} sold ${actualQuantity} goods to ${this.dockedStation.name} for $${totalPayment}`,
-                { trader: this.mesh.uuid.slice(0, 8), action: 'sell', item: 'goods', quantity: actualQuantity, payment: totalPayment }
-              );
-            }
-          }
-        }
-        break;
-        
-      case 'buy_materials':
-        if (this.materials + this.goods < this.maxCargo && this.dockedStation.canSellMaterials(tradeQuantity)) {
-          const actualQuantity = Math.min(tradeQuantity, this.maxCargo - (this.materials + this.goods));
-          const pricePerUnit = this.dockedStation.getMaterialPrice();
-          const totalCost = pricePerUnit * actualQuantity;
-          
-          // ACTUAL CREDIT EXCHANGE  
-          if (this.credits >= totalCost) {
-            this.materials += actualQuantity;
-            this.dockedStation.sellMaterials(actualQuantity);
-            this.credits -= totalCost;                   // Trader pays
-            this.dockedStation.credits += totalCost;     // Station receives
-            tradeSuccess = true;
-            
-            if (this.game.eventLogger) {
-              this.game.eventLogger.logEconomic(
-                `Trader ${this.mesh.uuid.slice(0, 8)} bought ${actualQuantity} materials from ${this.dockedStation.name} for $${totalCost}`,
-                { trader: this.mesh.uuid.slice(0, 8), action: 'buy', item: 'materials', quantity: actualQuantity, cost: totalCost }
-              );
-            }
-          }
-        }
-        break;
-        
-      case 'buy_goods':
-        if (this.materials + this.goods < this.maxCargo && this.dockedStation.canSellGoods(tradeQuantity)) {
-          const actualQuantity = Math.min(tradeQuantity, this.maxCargo - (this.materials + this.goods));
-          const pricePerUnit = this.dockedStation.getGoodsPrice();
-          const totalCost = pricePerUnit * actualQuantity;
-          
-          // ACTUAL CREDIT EXCHANGE
-          if (this.credits >= totalCost) {
-            this.goods += actualQuantity;
-            this.dockedStation.sellGoods(actualQuantity);
-            this.credits -= totalCost;                   // Trader pays
-            this.dockedStation.credits += totalCost;     // Station receives
-            tradeSuccess = true;
-            
-            if (this.game.eventLogger) {
-              this.game.eventLogger.logEconomic(
-                `Trader ${this.mesh.uuid.slice(0, 8)} bought ${actualQuantity} goods from ${this.dockedStation.name} for $${totalCost}`,
-                { trader: this.mesh.uuid.slice(0, 8), action: 'buy', item: 'goods', quantity: actualQuantity, cost: totalCost }
-              );
-            }
-          }
-        }
-        break;
-    }
-
-    // DEBUG LOGGING
-    console.log(`AFTER TRADE: Trader credits=${this.credits}, Station credits=${this.dockedStation.credits}`);
-
-    // Clear trade plan after attempting (successful or not)
-    this.tradeType = null;
-  }
-
-  // NEW: Undock from station
-  undockFromStation() {
-    if (this.game.eventLogger) {
-      this.game.eventLogger.logEconomic(
-        `Trader ${this.mesh.uuid.slice(0, 8)} undocked from ${this.dockedStation.name}`,
-        { 
-          trader: this.mesh.uuid.slice(0, 8),
-          station: this.dockedStation.name,
-          action: 'undock',
-          cargo: { materials: this.materials, goods: this.goods }
-        }
-      );
-    }
-
-    this.docked = false;
-    this.dockedStation = null;
-    this.dockTime = 0;
-    this.target = null;
-    this.actionCooldown = 2.0; // Brief cooldown before seeking new opportunities
-    this.state = 'SEEKING';
-  }
-}
-
-// UNIFIED STATION WITH TRADING AND ECONOMY - Only station class needed!
-export class SimpleStationWithTrading {
-  constructor(x, y, name, CSS2DObjectConstructor) {
-    this.name = name;
-    this.mesh = this.createMesh();
-    this.mesh.position.set(x, y, 0);
-    
-    // SIMPLE CARGO SYSTEM + FOOD
-    this.materials = 5 + Math.floor(Math.random() * 15); // 5-20 materials to start
-    this.producedGoods = 2 + Math.floor(Math.random() * 8); // 2-10 produced goods to start
-    this.food = 3 + Math.floor(Math.random() * 7); // 3-10 food to start (CRITICAL RESOURCE)
-    this.maxCargo = 50; // Can hold up to 50 total items (materials + goods + food)
-    
-    // POPULATION & CONSUMPTION
-    this.population = 800 + Math.floor(Math.random() * 1200);
-    this.consumptionRate = this.population / 1000; // 1 good per 1000 people per day
-    
-    // STATION SPECIALIZATION SYSTEM
-    const stationTypes = ['mining', 'agricultural', 'manufacturing', 'trade_hub'];
-    this.stationType = stationTypes[Math.floor(Math.random() * stationTypes.length)];
-    this.productionModifiers = this.getProductionModifiers();
-    
-    // POPULATION DYNAMICS (Simple happiness system)
-    this.happiness = 50; // 0-100 scale
-    this.lastPirateAttack = 0;
-    this.lastPopulationUpdate = Date.now();
-    
-    // PRODUCTION SYSTEM
-    this.productionRate = 1.0; // Can produce 1 good per 2 materials (when conditions are met)
-    this.lastProductionTime = Date.now();
-    this.productionInterval = 5000; // Try to produce every 5 seconds
-    
-    // CREDITS FOR TRADING
-    this.credits = 1000 + Math.floor(Math.random() * 2000);
-    
-    // MINER SPAWNING SYSTEM
-    this.miners = [];
-    this.maxMiners = 3; // CHANGED: 3 miners per station instead of 1
-    this.minerCost = { goods: 2, credits: 300 }; // Cheaper than traders
-    this.lastMinerCheck = 0;
-    this.minerCheckInterval = 5000; // CHANGED: Check every 5 seconds instead of 10
-    
-    // PIRATE DETECTION
-    this.pirateDetectionRange = 100; // Can see pirates within 100 units
-    this.lastDistressCall = 0;
-    this.distressCallCooldown = 30000; // Only call for help every 30 seconds
-    
-    // VISUAL
-    this.label = this.createLabel(CSS2DObjectConstructor);
-    this.mesh.add(this.label);
-  }
-
-  createMesh() {
-    const group = new THREE.Group();
-    const coreGeometry = new THREE.CylinderGeometry(3, 3, 1, 8);
-    const coreMaterial = new THREE.MeshBasicMaterial({ color: 0x666666 });
-    const core = new THREE.Mesh(coreGeometry, coreMaterial);
-    group.add(core);
-    
-    const ringGeometry = new THREE.TorusGeometry(4, 0.5, 8, 16);
-    const ringMaterial = new THREE.MeshBasicMaterial({ color: 0x888888 });
-    const ring = new THREE.Mesh(ringGeometry, ringMaterial);
-    ring.rotation.x = Math.PI / 2;
-    group.add(ring);
-    
-    return group;
-  }
-
-  createLabel(CSS2DObjectConstructor) {
-    const div = document.createElement('div');
-    div.className = 'station-label';
-    this.updateLabelContent(div);
-    
-    div.style.fontFamily = "'Lucida Console', 'Courier New', monospace";
-    div.style.color = '#00ff00';
-    div.style.fontSize = '13px';
-    div.style.textAlign = 'center';
-    div.style.textShadow = '1px 1px 1px rgba(0,0,0,0.7)';
-    div.style.backgroundColor = 'rgba(0, 20, 0, 0.5)';
-    div.style.padding = '2px 4px';
-    div.style.border = '1px solid rgba(0,255,0,0.3)';
-    div.style.borderRadius = '2px';
-    
-    const label = new CSS2DObjectConstructor(div);
-    label.position.set(0, 5.5, 0);
-    return label;
-  }
-
-  update(deltaTime, game) {
-    console.log(`${this.name}: update called, materials=${this.materials}, goods=${this.producedGoods}, credits=${this.credits}`);
-    
-    const currentTime = Date.now();
-    
-    // 1. CHECK FOR PIRATES AND CALL FOR HELP
-    this.checkForPiratesAndCallHelp(game, currentTime);
-    
-    // 2. CONSUME GOODS (population needs)
-    this.consumeGoods(deltaTime);
-    
-    // 3. PRODUCE GOODS (if we have materials)
-    this.produceGoods(currentTime);
-    
-    // 4. UPDATE POPULATION DYNAMICS
-    this.updatePopulation(currentTime);
-    
-    // 5. CHECK FOR MINER SPAWNING
-    this.checkMinerSpawning(currentTime, game);
-    
-    // 6. UPDATE VISUAL LABEL
-    this.updateLabelContent(this.label.element);
-    
-    console.log(`${this.name}: after update, materials=${this.materials}, goods=${this.producedGoods}`);
-  }
-
-  checkForPiratesAndCallHelp(game, currentTime) {
-    // Only check if we haven't called for help recently
-    if (currentTime - this.lastDistressCall < this.distressCallCooldown) return;
-    
-    // Look for pirates within detection range
-    const nearbyPirates = game.entities.pirates.filter(pirate => {
-      const distance = pirate.mesh.position.distanceTo(this.mesh.position);
-      return distance < this.pirateDetectionRange;
-    });
-    
-    if (nearbyPirates.length > 0) {
-      this.callForPoliceHelp(game);
-      this.lastDistressCall = currentTime;
-    }
-  }
-
-  callForPoliceHelp(game) {
-    // Create distress beacon at station location
-    const beacon = new DistressBeacon(this.mesh.position.x, this.mesh.position.y);
-    beacon.isStationDistress = true;
-    
-    if (!game.entities.distressBeacons) {
-      game.entities.distressBeacons = [];
-    }
-    game.entities.distressBeacons.push(beacon);
-    game.scene.add(beacon.mesh);
-    
-    if (game.ui) {
-      game.ui.showMessage(`${this.name}: Pirates detected! Police assistance requested!`, 'warning');
-    }
-  }
-
-  consumeGoods(deltaTime) {
-    // Population consumes 1 produced good per 1000 people per day
-    // Convert to per-second: 1 good per 1000 people per 180 seconds (3 minutes = 1 game day)
-    const consumptionPerSecond = this.consumptionRate / 180; // Game time, not real time!
-    const actualConsumption = consumptionPerSecond * deltaTime;
-    
-    // Accumulate fractional consumption
-    if (!this.consumptionAccumulator) this.consumptionAccumulator = 0;
-    this.consumptionAccumulator += actualConsumption;
-    
-    // When we've accumulated enough for a whole good, consume it
-    if (this.consumptionAccumulator >= 1.0 && this.producedGoods > 0) {
-      this.producedGoods--;
-      this.consumptionAccumulator -= 1.0;
-    }
-    
-    // ADD CRITICAL FOOD CONSUMPTION
-    if (!this.foodConsumptionAccumulator) this.foodConsumptionAccumulator = 0;
-    this.foodConsumptionAccumulator += actualConsumption * 0.8; // Food consumption rate
-    
-    if (this.foodConsumptionAccumulator >= 1.0) {
-      if (this.food > 0) {
-        this.food--;
-        this.foodConsumptionAccumulator -= 1.0;
-      } else {
-        // STARVATION - much worse than no goods
-        const starvationLoss = Math.min(20, Math.floor(this.population * 0.03)); // 3% population loss
-        this.population -= starvationLoss;
-        this.foodConsumptionAccumulator -= 1.0;
-        
-        // Starvation also halts production
-        if (this.stationType === 'mining') {
-          this.materials = Math.max(0, this.materials - 1); // Workers abandon equipment
-        }
-      }
-    }
-    
-    // POPULATION DECLINE when no goods available - MUCH FASTER!
-    if (this.producedGoods === 0 && this.consumptionAccumulator >= 1.0) {
-      // Lose multiple people when starving - dramatic population collapse!
-      const populationLoss = Math.min(10, Math.floor(this.population * 0.01)); // Lose 1% of population or 10 people, whichever is smaller
-      this.population -= populationLoss;
-      this.consumptionAccumulator -= 1.0; // Still consume the "demand"
-      console.log(`${this.name} population declining: ${this.population} (-${populationLoss} people - STARVATION!)`);
-      
-      // Also reduce consumption rate since we have fewer people
-      this.consumptionRate = Math.max(0.1, this.population / 1000); // Don't let it go below 0.1
-      
-      // Station in crisis - lose credits too from economic collapse
-      this.credits = Math.max(0, this.credits - 50);
-    }
-  }
-
-  produceGoods(currentTime) {
-    // Only try to produce every few seconds
-    if (currentTime - this.lastProductionTime < this.productionInterval) return;
-    
-    // Check if we have cargo space first
-    const totalCargo = this.materials + this.producedGoods + this.food;
-    if (totalCargo >= this.maxCargo) return;
-    
-    // SPECIALIZED PRODUCTION BASED ON STATION TYPE
-    let produced = false;
-    
-    if (this.stationType === 'mining' && this.food >= 1) {
-      // Mining: 1 food → 3 materials (needs food for workers)
-      this.food--;
-      this.materials += Math.floor(3 * this.productionModifiers.materials);
-      produced = true;
-      
-    } else if (this.stationType === 'agricultural' && this.materials >= 1) {
-      // Agriculture: 1 material → 3 food (needs materials for equipment)
-      this.materials--;
-      this.food += Math.floor(3 * this.productionModifiers.food);
-      produced = true;
-      
-    } else if (this.stationType === 'manufacturing' && this.materials >= 2 && this.food >= 1) {
-      // Manufacturing: 2 materials + 1 food → 2 goods (existing logic + food requirement)
-      this.materials -= 2;
-      this.food--;
-      this.producedGoods += Math.floor(2 * this.productionModifiers.goods);
-      produced = true;
-      
-    } else if (this.stationType === 'trade_hub') {
-      // Trade hubs don't produce, they just facilitate trade
-      produced = false;
-    }
-    
-    if (produced) {
-      this.lastProductionTime = currentTime;
-      this.showProductionEffect();
-    }
-  }
-
-  showProductionEffect() {
-    // Simple visual effect - change station color briefly
-    const core = this.mesh.children[0]; // First child is the core
-    const originalColor = core.material.color.clone();
-    
-    // Flash green for production
-    core.material.color.setHex(0x00ff00);
-    
-    setTimeout(() => {
-      core.material.color.copy(originalColor);
-    }, 500);
-  }
-
-  updatePopulation(currentTime) {
-    // Only update every 15 seconds to avoid complexity
-    if (currentTime - this.lastPopulationUpdate < 15000) return;
-    this.lastPopulationUpdate = currentTime;
-
-    // Simple happiness calculation
-    let happiness = 50; // Base
-    if (this.producedGoods >= 5) happiness += 20;
-    else if (this.producedGoods === 0) happiness -= 20;
-    
-    if (this.materials >= 10) happiness += 10;
-    else if (this.materials < 3) happiness -= 10;
-    
-    // Recent pirate attack penalty
-    if (Date.now() - this.lastPirateAttack < 60000) happiness -= 15;
-    
-    this.happiness = Math.max(0, Math.min(100, happiness));
-    
-    // Population change based on happiness
-    if (this.happiness >= 70) this.population += Math.floor(this.population * 0.01);
-    else if (this.happiness < 30) this.population -= Math.floor(this.population * 0.01);
-    
-    this.population = Math.max(100, Math.min(3000, this.population));
-    this.consumptionRate = this.population / 1000;
-  }
-
-  getProductionModifiers() {
-    switch(this.stationType) {
-      case 'mining':
-        return { materials: 2.0, goods: 0.3, food: 0.1 }; // Great at materials, awful at food
-      case 'agricultural': 
-        return { materials: 0.2, goods: 0.3, food: 2.0 }; // Great at food, awful at materials
-      case 'manufacturing':
-        return { materials: 0.5, goods: 2.0, food: 0.2 }; // Great at goods, needs food imports
-      case 'trade_hub':
-        return { materials: 0.1, goods: 0.1, food: 0.1 }; // Terrible at everything, just trades
-      default:
-        return { materials: 1.0, goods: 1.0, food: 1.0 };
-    }
-  }
-
-  recordPirateAttack() {
-    this.lastPirateAttack = Date.now();
-  }
-
-  // TRADE METHODS - For AI and player interaction
-  canSellMaterials(quantity) {
-    return this.materials >= quantity;
-  }
-
-  canBuyMaterials(quantity) {
-    const totalCargo = this.materials + this.producedGoods;
-    return (totalCargo + quantity) <= this.maxCargo;
-  }
-
-  canSellGoods(quantity) {
-    return this.producedGoods >= quantity;
-  }
-
-  canBuyGoods(quantity) {
-    const totalCargo = this.materials + this.producedGoods;
-    return (totalCargo + quantity) <= this.maxCargo;
-  }
-
-  sellMaterials(quantity) {
-    if (this.canSellMaterials(quantity)) {
-      this.materials -= quantity;
-      return true;
-    }
-    return false;
-  }
-
-  buyMaterials(quantity) {
-    if (this.canBuyMaterials(quantity)) {
-      this.materials += quantity;
-      return true;
-    }
-    return false;
-  }
-
-  sellGoods(quantity) {
-    if (this.canSellGoods(quantity)) {
-      this.producedGoods -= quantity;
-      return true;
-    }
-    return false;
-  }
-
-  buyGoods(quantity) {
-    if (this.canBuyGoods(quantity)) {
-      this.producedGoods += quantity;
-      return true;
-    }
-    return false;
-  }
-
-  // SIMPLE PRICING - Materials cheaper, goods more expensive
-  getMaterialPrice() {
-    // Base price affected by scarcity
-    const scarcityMultiplier = this.materials < 5 ? 1.5 : (this.materials > 20 ? 0.8 : 1.0);
-    return Math.floor(50 * scarcityMultiplier);
-  }
-
-  getGoodsPrice() {
-    // Base price affected by scarcity  
-    const scarcityMultiplier = this.producedGoods < 3 ? 1.8 : (this.producedGoods > 15 ? 0.7 : 1.0);
-    return Math.floor(120 * scarcityMultiplier);
-  }
-
-  // GET STATUS FOR UI/DEBUG
-  getEconomicStatus() {
-    const totalCargo = this.materials + this.producedGoods;
-    const cargoFull = totalCargo >= this.maxCargo;
-    const canProduce = this.materials >= 2 && !cargoFull;
-    const needsGoods = this.producedGoods < 5;
-    const needsMaterials = this.materials < 10;
-    
-    return {
-      materials: this.materials,
-      goods: this.producedGoods,
-      totalCargo: totalCargo,
-      cargoFull: cargoFull,
-      canProduce: canProduce,
-      needsGoods: needsGoods,
-      needsMaterials: needsMaterials,
-      population: Math.floor(this.population),
-      consumptionRate: this.consumptionRate
-    };
-  }
-
-  checkMinerSpawning(currentTime, game) {
-    // Only check every 10 seconds
-    if (currentTime - this.lastMinerCheck < this.minerCheckInterval) return;
-    this.lastMinerCheck = currentTime;
-
-    // Clean up destroyed miners
-    this.miners = this.miners.filter(miner => game.entities.miners && game.entities.miners.includes(miner));
-    
-    // Do we need miners? (when materials < 8 and we can afford it)
-    if (this.miners.length < this.maxMiners && 
-        this.materials < 8 && 
-        this.producedGoods >= this.minerCost.goods && 
-        this.credits >= this.minerCost.credits) {
-      
-      this.spawnMiner(game);
-    }
-  }
-
-  spawnMiner(game) {
-    // Pay cost
-    this.producedGoods -= this.minerCost.goods;
-    this.credits -= this.minerCost.credits;
-    
-    // Spawn near station
-    const angle = Math.random() * Math.PI * 2;
-    const distance = 15 + Math.random() * 10;
-    const x = this.mesh.position.x + Math.cos(angle) * distance;
-    const y = this.mesh.position.y + Math.sin(angle) * distance;
-    
-    // Create SimpleMiner
-    const miner = new SimpleMiner(x, y, this, game);
-    
-    // Add to game
-    if (!game.entities.miners) game.entities.miners = [];
-    game.entities.miners.push(miner);
-    game.scene.add(miner.mesh);
-    this.miners.push(miner);
-    
-    // Log it
-    if (game.eventLogger) {
-      game.eventLogger.logStation(`${this.name} deployed mining ship (-${this.minerCost.goods} goods, -$${this.minerCost.credits})`);
-    }
-
-    if (game.ui) {
-      game.ui.showMessage(`${this.name} deployed mining ship!`, 'system-neutral');
-    }
-  }
-
-  // PLAYER TRADING METHODS
   
-  // Player wants to BUY materials FROM station (station sells to player)
-  playerBuyMaterials(quantity, playerCredits) {
-    const price = this.getMaterialPrice();
-    const totalCost = price * quantity;
-    
-    if (playerCredits >= totalCost && this.canSellMaterials(quantity)) {
-      this.sellMaterials(quantity);
-      this.credits += totalCost;
-      return { success: true, cost: totalCost, unitPrice: price };
-    }
-    return { success: false, reason: playerCredits < totalCost ? 'insufficient_credits' : 'insufficient_stock' };
-  }
-
-  // Player wants to SELL materials TO station (station buys from player)  
-  playerSellMaterials(quantity, playerMaterials) {
-    const price = Math.floor(this.getMaterialPrice() * 0.8); // Station buys at 80% of sell price
-    const totalValue = price * quantity;
-    
-    if (playerMaterials >= quantity && this.canBuyMaterials(quantity) && this.credits >= totalValue) {
-      this.buyMaterials(quantity);
-      this.credits -= totalValue;
-      return { success: true, value: totalValue, unitPrice: price };
-    }
-    return { success: false, reason: this.credits < totalValue ? 'station_poor' : 'station_full' };
-  }
-
-  // Player wants to BUY goods FROM station
-  playerBuyGoods(quantity, playerCredits) {
-    const price = this.getGoodsPrice();
-    const totalCost = price * quantity;
-    
-    if (playerCredits >= totalCost && this.canSellGoods(quantity)) {
-      this.sellGoods(quantity);
-      this.credits += totalCost;
-      return { success: true, cost: totalCost, unitPrice: price };
-    }
-    return { success: false, reason: playerCredits < totalCost ? 'insufficient_credits' : 'insufficient_stock' };
-  }
-
-  // Player wants to SELL goods TO station
-  playerSellGoods(quantity, playerGoods) {
-    const price = Math.floor(this.getGoodsPrice() * 0.9); // Station buys at 90% of sell price
-    const totalValue = price * quantity;
-    
-    if (playerGoods >= quantity && this.canBuyGoods(quantity) && this.credits >= totalValue) {
-      this.buyGoods(quantity);
-      this.credits -= totalValue;
-      return { success: true, value: totalValue, unitPrice: price };
-    }
-    return { success: false, reason: this.credits < totalValue ? 'station_poor' : 'station_full' };
-  }
-
-  // GET TRADE OPTIONS FOR UI
-  getTradeOptions() {
-    return {
-      // What station is selling TO player
-      selling: {
-        materials: {
-          available: this.materials,
-          price: this.getMaterialPrice(),
-          canSell: this.materials > 0
-        },
-        goods: {
-          available: this.producedGoods,
-          price: this.getGoodsPrice(),
-          canSell: this.producedGoods > 0
-        }
-      },
-      // What station is buying FROM player
-      buying: {
-        materials: {
-          space: this.maxCargo - (this.materials + this.producedGoods),
-          price: Math.floor(this.getMaterialPrice() * 0.8),
-          canBuy: this.canBuyMaterials(1) && this.credits >= Math.floor(this.getMaterialPrice() * 0.8)
-        },
-        goods: {
-          space: this.maxCargo - (this.materials + this.producedGoods),
-          price: Math.floor(this.getGoodsPrice() * 0.9),
-          canBuy: this.canBuyGoods(1) && this.credits >= Math.floor(this.getGoodsPrice() * 0.9)
-        }
-      },
-      stationCredits: this.credits
-    };
-  }
-
-  // UPDATE LABEL TO SHOW STATION TYPE + FOOD STATUS
-  updateLabelContent(div) {
-    const totalCargo = this.materials + this.producedGoods + this.food;
-    const cargoPercent = Math.floor((totalCargo / this.maxCargo) * 100);
-    const happinessIcon = this.happiness >= 70 ? '😊' : this.happiness >= 40 ? '😐' : '😞';
-    
-    // Station type icons with specialization
-    const typeIcons = {
-      'mining': '⛏️',
-      'agricultural': '🌾', 
-      'manufacturing': '🏭',
-      'trade_hub': '🏪'
-    };
-    
-    // Food crisis warning
-    const foodColor = this.food === 0 ? '#ff0000' : this.food < 3 ? '#ffaa00' : '#88ff88';
-    const foodIcon = this.food === 0 ? '🚨' : this.food < 3 ? '⚠️' : '';
-    
-    div.innerHTML = `${this.name} ${typeIcons[this.stationType] || ''}<br>
-      <span style="font-size: 0.8em; color: #ffaa00;">Pop: ${Math.floor(this.population)} ${happinessIcon}</span><br>
-      <span style="font-size: 0.7em; color: #00ffff;">Materials: ${this.materials}</span><br>
-      <span style="font-size: 0.7em; color: #ff88ff;">Goods: ${this.producedGoods}</span><br>
-      <span style="font-size: 0.7em; color: ${foodColor};">Food: ${this.food} ${foodIcon}</span><br>
-      <span style="font-size: 0.6em; color: #ffff00;">Credits: ${this.credits}</span><br>
-      <span style="font-size: 0.6em; color: #888888;">Cargo: ${cargoPercent}%</span>`;
+  update() {}
+  updatePrices() {}
+  getPrice(resource, basePrice) {
+    return basePrice * (this.priceMultipliers[resource] || 1.0);
   }
 }
 
-// SIMPLE PLAYER CARGO SYSTEM
-export class SimplePlayerCargo {
-  static initializePlayerCargo(gameState) {
-    // Replace complex cargo system with simple one
-    gameState.materials = 0;
-    gameState.goods = 0;
-    gameState.cargo = []; // Keep old cargo for backwards compatibility
-    gameState.maxCargo = 10; // Total items (materials + goods)
-  }
-
-  static getPlayerCargoStatus(gameState) {
-    return {
-      materials: gameState.materials || 0,
-      goods: gameState.goods || 0,
-      totalCargo: (gameState.materials || 0) + (gameState.goods || 0),
-      maxCargo: gameState.maxCargo,
-      cargoSpace: gameState.maxCargo - ((gameState.materials || 0) + (gameState.goods || 0))
-    };
-  }
-
-  static canCarryMore(gameState, quantity = 1) {
-    const current = (gameState.materials || 0) + (gameState.goods || 0);
-    return current + quantity <= gameState.maxCargo;
-  }
-}
-
-// SIMPLE MINER AI - Collects ore from asteroids and returns to station
-export class SimpleMiner {
-  constructor(x, y, homeStation, game) {
+// PIRATE STATION (placeholder for compatibility)
+export class PirateStation {
+  constructor(position) {
+    this.position = position;
     this.mesh = this.createMesh();
-    this.mesh.position.set(x, y, 0);
-    this.velocity = new THREE.Vector2(0, 0);
-    this.maxSpeed = 15;
-    this.homeStation = homeStation;
-    this.game = game;
-    
-    // MINING CARGO
-    this.ore = 0;
-    this.maxOre = 5; // Can carry 5 ore before returning
-    
-    // AI STATE - 3-state FSM like other ships
-    this.state = 'SEEK_ASTEROID'; // SEEK_ASTEROID, MINE, RETURN
-    this.target = null;
-    this.miningTimer = 0;
-    this.miningTimeNeeded = 3.0; // 3 seconds to mine an asteroid
-    
-    // DOCKING SYSTEM (like SimpleTrader)
-    this.docked = false;
-    this.dockedStation = null;
-    this.dockTime = 0;
-    this.minDockTime = 2.0; // Faster docking for miners
-    this.maxDockTime = 4.0;
-    
-    this.health = 30; // Lighter than traders
-    this.maxHealth = 30;
+    this.type = 'pirate';
+    this.resources = { materials: 0, food: 0 };
   }
-
+  
   createMesh() {
-    const group = new THREE.Group();
-    // Mining ship - yellow/orange color
-    const hullGeometry = new THREE.BoxGeometry(1.8, 1.2, 0.8);
-    const hullMaterial = new THREE.MeshBasicMaterial({ color: 0xffaa00 });
-    const hull = new THREE.Mesh(hullGeometry, hullMaterial);
-    group.add(hull);
-    
-    // Mining drill
-    const drillGeometry = new THREE.CylinderGeometry(0.2, 0.3, 1, 6);
-    const drillMaterial = new THREE.MeshBasicMaterial({ color: 0x888888 });
-    const drill = new THREE.Mesh(drillGeometry, drillMaterial);
-    drill.position.set(1.1, 0, 0);
-    drill.rotation.z = Math.PI / 2;
-    group.add(drill);
-    
-    return group;
+    const geometry = new THREE.BoxGeometry(4, 4, 4);
+    const material = new THREE.MeshBasicMaterial({ color: 0x441111 });
+    const mesh = new THREE.Mesh(geometry, material);
+    mesh.position.copy(this.position);
+    return mesh;
   }
-
-  update(deltaTime) {
-    // DEBUG LOGGING FOR MINER STATE TRACKING
-    console.log(`Miner ${this.mesh.uuid.slice(0,4)}: State=${this.state}, Target=${this.target?.constructor?.name || 'none'}, Ore=${this.ore}/${this.maxOre}`);
-
-    // Handle docking time (same as trader)
-    if (this.docked) {
-      this.dockTime -= deltaTime;
-      
-      if (this.dockTime <= 0) {
-        this.undockFromStation();
-      } else {
-        // While docked, try to deliver ore
-        this.handleDockedDelivery();
-        return; // Don't move while docked
-      }
-    }
-
-    // 3-STATE FSM
-    switch(this.state) {
-      case 'SEEK_ASTEROID':
-        this.seekAsteroid(deltaTime);
-        break;
-      case 'MINE':
-        this.mineAsteroid(deltaTime);
-        break;
-      case 'RETURN':
-        this.returnToStation(deltaTime);
-        break;
-    }
-
-    // Apply movement (only if not docked)
-    if (!this.docked) {
-      this.velocity.multiplyScalar(0.85);
-      if (this.velocity.length() > this.maxSpeed) {
-        this.velocity.normalize().multiplyScalar(this.maxSpeed);
-      }
-      this.mesh.position.x += this.velocity.x * deltaTime;
-      this.mesh.position.y += this.velocity.y * deltaTime;
-    }
-  }
-
-  seekAsteroid(deltaTime) {
-    // Find closest asteroid
-    if (!this.target || !this.game.entities.asteroids.includes(this.target)) {
-      this.target = this.findClosestAsteroid();
-    }
-
-    if (!this.target) {
-      // No asteroids available, patrol around home station
-      this.patrolAroundStation(deltaTime);
-      return;
-    }
-
-    // Move toward target asteroid
-    const dx = this.target.mesh.position.x - this.mesh.position.x;
-    const dy = this.target.mesh.position.y - this.mesh.position.y;
-    const distance = Math.sqrt(dx * dx + dy * dy);
-
-    if (distance < 8) { // Close enough to start mining
-      this.state = 'MINE';
-      this.velocity.set(0, 0);
-      this.miningTimer = 0;
-    } else {
-      // Move toward asteroid
-      this.velocity.x += (dx / distance) * this.maxSpeed * deltaTime * 2;
-      this.velocity.y += (dy / distance) * this.maxSpeed * deltaTime * 2;
-      this.mesh.rotation.z = Math.atan2(dy, dx) + Math.PI / 2;
-    }
-  }
-
-  mineAsteroid(deltaTime) {
-    if (!this.target || !this.game.entities.asteroids.includes(this.target)) {
-      // Asteroid was destroyed or disappeared
-      this.state = 'SEEK_ASTEROID';
-      this.target = null;
-      return;
-    }
-
-    // Mining process
-    this.miningTimer += deltaTime;
-    
-    if (this.miningTimer >= this.miningTimeNeeded) {
-      // Check if asteroid has ore to mine
-      if (this.target.currentOre > 0) {
-        // Successfully mined ore
-        this.ore++;
-        this.target.currentOre--; // CORRECT - using AI mining system
-        this.miningTimer = 0;
-
-        // Log mining
-        if (this.game.eventLogger) {
-          this.game.eventLogger.logEconomic(
-            `Miner extracted ore from asteroid (${this.ore}/${this.maxOre}, asteroid: ${this.target.currentOre}/${this.target.maxOre})`,
-            { miner: this.mesh.uuid.slice(0, 8), ore: this.ore, asteroidOre: this.target.currentOre }
-          );
-        }
-
-        // Check if asteroid is completely depleted of ore
-        if (this.target.currentOre <= 0) {
-          this.target.aiDepleted = true;
-          // Don't remove asteroid, just mark as depleted for AI miners
-          this.target = null;
-        }
-
-        // Check if cargo is full or should return
-        if (this.ore >= this.maxOre || !this.target) {
-          this.state = 'RETURN';
-          this.target = null;
-        } else {
-          // Continue mining same asteroid if it has more ore
-          this.miningTimer = 0;
-        }
-      } else {
-        // Asteroid is depleted of ore for AI miners
-        this.target.aiDepleted = true;
-        this.target = null;
-        this.state = 'SEEK_ASTEROID';
-      }
-    }
-  }
-
-  returnToStation(deltaTime) {
-    // Move toward home station
-    const dx = this.homeStation.mesh.position.x - this.mesh.position.x;
-    const dy = this.homeStation.mesh.position.y - this.mesh.position.y;
-    const distance = Math.sqrt(dx * dx + dy * dy);
-
-    if (distance < 15) {
-      // Close enough to dock
-      this.dockAtStation();
-    } else {
-      // Move toward station
-      this.velocity.x += (dx / distance) * this.maxSpeed * deltaTime * 2;
-      this.velocity.y += (dy / distance) * this.maxSpeed * deltaTime * 2;
-      this.mesh.rotation.z = Math.atan2(dy, dx) + Math.PI / 2;
-    }
-  }
-
-  findClosestAsteroid() {
-    let closest = null;
-    let closestDist = 800; // Increased from 300 to 800
-
-    this.game.entities.asteroids.forEach(asteroid => {
-      // Only target asteroids that have ore available for AI miners
-      if (asteroid.currentOre > 0) {
-        const dist = this.mesh.position.distanceTo(asteroid.mesh.position);
-        if (dist < closestDist) {
-          closest = asteroid;
-          closestDist = dist;
-        }
-      }
-    });
-
-    return closest;
-  }
-
-  patrolAroundStation(deltaTime) {
-    // Simple patrol around home station when no asteroids
-    if (!this.patrolTarget || this.reachedTarget(this.patrolTarget, 20)) {
-      const angle = Math.random() * Math.PI * 2;
-      const distance = 30 + Math.random() * 20;
-      this.patrolTarget = {
-        x: this.homeStation.mesh.position.x + Math.cos(angle) * distance,
-        y: this.homeStation.mesh.position.y + Math.sin(angle) * distance
-      };
-    }
-    this.moveToward(this.patrolTarget, deltaTime, 0.6);
-  }
-
-  dockAtStation() {
-    this.docked = true;
-    this.dockedStation = this.homeStation;
-    this.dockTime = this.minDockTime + Math.random() * (this.maxDockTime - this.minDockTime);
-    
-    // Move ship to station position (visual docking)
-    this.mesh.position.copy(this.homeStation.mesh.position);
-    this.velocity.set(0, 0);
-    
-    // Log docking
-    if (this.game.eventLogger) {
-      this.game.eventLogger.logEconomic(
-        `Miner docked at ${this.homeStation.name} with ${this.ore} ore`,
-        { 
-          miner: this.mesh.uuid.slice(0, 8),
-          station: this.homeStation.name,
-          ore: this.ore
-        }
-      );
-    }
-  }
-
-  handleDockedDelivery() {
-    if (this.ore > 0) {
-      // Convert ore to materials (1 ore = 1 material)
-      const materialsToAdd = this.ore;
-      if (this.homeStation.canBuyMaterials(materialsToAdd)) {
-        this.homeStation.buyMaterials(materialsToAdd);
-        this.ore = 0;
-        
-        if (this.game.eventLogger) {
-          this.game.eventLogger.logEconomic(
-            `Miner delivered ${materialsToAdd} materials to ${this.homeStation.name}`,
-            { 
-              miner: this.mesh.uuid.slice(0, 8),
-              materials: materialsToAdd,
-              station: this.homeStation.name
-            }
-          );
-        }
-      }
-    }
-  }
-
-  undockFromStation() {
-    if (this.game.eventLogger) {
-      this.game.eventLogger.logEconomic(
-        `Miner undocked from ${this.homeStation.name}`,
-        { 
-          miner: this.mesh.uuid.slice(0, 8),
-          station: this.homeStation.name
-        }
-      );
-    }
-
-    this.docked = false;
-    this.dockedStation = null;
-    this.dockTime = 0;
-    this.state = 'SEEK_ASTEROID'; // Go find more asteroids
-  }
-
-  // Helper methods (same as other ships)
-  moveToward(targetPos, deltaTime, speedMod = 1.0) {
-    const dx = targetPos.x - this.mesh.position.x;
-    const dy = targetPos.y - this.mesh.position.y;
-    const dist = Math.sqrt(dx * dx + dy * dy);
-    
-    if (dist > 1) {
-      this.velocity.x += (dx / dist) * this.maxSpeed * speedMod * deltaTime * 3;
-      this.velocity.y += (dy / dist) * this.maxSpeed * speedMod * deltaTime * 3;
-    }
-    
-    this.mesh.rotation.z = Math.atan2(dy, dx) + Math.PI / 2;
-  }
-
-  reachedTarget(target, threshold) {
-    const dx = target.x - this.mesh.position.x;
-    const dy = target.y - this.mesh.position.y;
-    return Math.sqrt(dx * dx + dy * dy) < threshold;
-  }
-
-  takeDamage(amount) {
-    this.health -= amount;
-    return this.health <= 0;
-  }
+  
+  update() {}
 }
-
-// Legacy aliases for compatibility
-export const Pirate = SimplePirate;
-export const Police = SimplePolice;
-export const FriendlyShip = SimpleFriendlyShip;

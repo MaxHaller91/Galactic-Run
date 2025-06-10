@@ -157,6 +157,64 @@ export class ZoneEventLogger {
         this.toggle();
       }
     });
+
+    // Add drag functionality to header only
+    this.setupDragFunctionality(header, loggerPanel);
+  }
+
+  setupDragFunctionality(dragHandle, panel) {
+    let isDragging = false;
+    let startX, startY, initialX, initialY;
+    
+    dragHandle.addEventListener('mousedown', (e) => {
+      // Only start drag if clicking on header (not buttons)
+      if (e.target.tagName === 'BUTTON') {
+        return;
+      }
+      
+      isDragging = true;
+      panel.style.opacity = '0.8';
+      panel.style.zIndex = '9999';
+      
+      startX = e.clientX;
+      startY = e.clientY;
+      
+      const rect = panel.getBoundingClientRect();
+      initialX = rect.left;
+      initialY = rect.top;
+      
+      e.preventDefault();
+      dragHandle.style.cursor = 'grabbing';
+    });
+    
+    document.addEventListener('mousemove', (e) => {
+      if (!isDragging) return;
+      
+      const deltaX = e.clientX - startX;
+      const deltaY = e.clientY - startY;
+      
+      const newX = initialX + deltaX;
+      const newY = initialY + deltaY;
+      
+      // Keep panel within viewport
+      const maxX = window.innerWidth - panel.offsetWidth;
+      const maxY = window.innerHeight - panel.offsetHeight;
+      
+      const clampedX = Math.max(0, Math.min(newX, maxX));
+      const clampedY = Math.max(0, Math.min(newY, maxY));
+      
+      panel.style.left = clampedX + 'px';
+      panel.style.top = clampedY + 'px';
+    });
+    
+    document.addEventListener('mouseup', () => {
+      if (isDragging) {
+        isDragging = false;
+        panel.style.opacity = '';
+        panel.style.zIndex = '1000';
+        dragHandle.style.cursor = '';
+      }
+    });
   }
 
   toggle() {

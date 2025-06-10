@@ -1,3 +1,5 @@
+import { TradingShip } from './entities.js';
+
 /**
  * Debug System for Space Cargo Commander
  * 
@@ -91,6 +93,10 @@ export class DebugSystem {
             <h5>Combat Tests</h5>
             <button class="debug-btn" id="spawnPirates">Spawn Pirates Here</button>
             <button class="debug-btn" id="clearPirates">Clear All Pirates</button>
+          </div>
+          <div class="debug-section">
+            <h5>Trading Ships</h5>
+            <button class="debug-btn" id="spawnTradingShips">Spawn 2 Trading Ships</button>
           </div>
         </div>
       </div>
@@ -368,6 +374,11 @@ export class DebugSystem {
     document.getElementById('clearPirates').addEventListener('click', () => {
       this.clearAllPirates();
     });
+    
+    // Add spawn trading ships button
+    document.getElementById('spawnTradingShips').addEventListener('click', () => {
+      this.spawnTradingShips();
+    });
 
     // Keyboard shortcut to toggle debug panel (Ctrl+Shift+D)
     document.addEventListener('keydown', (e) => {
@@ -591,6 +602,26 @@ export class DebugSystem {
     });
     this.game.entities.pirates = [];
     this.game.ui.showMessage('Cleared all pirates', 'system-neutral');
+  }
+
+  spawnTradingShips() {
+    const playerPos = this.game.playerShip.mesh.position;
+    
+    for (let i = 0; i < 2; i++) {
+      const angle = (i / 2) * Math.PI * 2;
+      const distance = 50 + Math.random() * 30;
+      const x = playerPos.x + Math.cos(angle) * distance;
+      const y = playerPos.y + Math.sin(angle) * distance;
+      
+      const spawnPos = new THREE.Vector3(x, y, 0);
+      const trader = new TradingShip(spawnPos, this.game.entities.stations);
+      
+      if (!this.game.entities.tradingShips) this.game.entities.tradingShips = [];
+      this.game.entities.tradingShips.push(trader);
+      this.game.scene.add(trader.mesh);
+    }
+    
+    this.game.ui.showMessage('Spawned 2 trading ships near player', 'system-neutral');
   }
 
   findNearestStation() {
