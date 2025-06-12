@@ -3,7 +3,15 @@ import { CSS2DRenderer, CSS2DObject } from 'three/renderers/CSS2DRenderer.js';
 // Removed duplicate imports
 import { PlayerShip } from 'ship';
 import { UIManager } from 'ui';
-import { Station, TradingShip, EconomicEngine, SimplePirate, Projectile, Asteroid, JumpGate, SimplePolice, PirateStation, DistressBeacon, SimpleFriendlyShip } from 'entities';
+// Entities split imports
+import { Station } from './src/entities/stations/Station.js';
+import { PirateStation } from './src/entities/stations/PirateStation.js';
+import { Asteroid } from './src/entities/misc/Asteroid.js';
+import { JumpGate } from './src/entities/misc/JumpGate.js';
+import { Projectile } from './src/entities/misc/Projectile.js';
+import { DistressBeacon } from './src/entities/misc/DistressBeacon.js';
+import { EconomicEngine } from './src/entities/misc/EconomicEngine.js';
+// TODO: Move remaining imports (TradingShip, SimplePirate, SimplePolice, SimpleFriendlyShip) to new locations
 // REMOVED: Complex COMMODITIES_LIST - using simple materials/goods system
 // REMOVED: MiningLaser - conflicts with AI mining system
 import { Minimap } from 'minimap'; // Import the Minimap class
@@ -322,12 +330,12 @@ export class SpaceCargoGame {
             this.spawnDerelicts(3); // Add derelict ships to discover
             
             // Add pirate station in Alpha Sector (low threat)
-            const pirateStation1 = new PirateStation(-700, -300, CSS2DObject);
+const pirateStation1 = new PirateStation(new THREE.Vector3(-700, -300, 0));
             this.entities.pirateStations.push(pirateStation1);
             this.scene.add(pirateStation1.mesh);
             
             // Jump gate positioned at zone edge
-            const gateToOuterWilds = new JumpGate(800, 0, 'outer-wilds', this.zones['outer-wilds'].name, CSS2DObject);
+const gateToOuterWilds = new JumpGate(800, 0, 'outer-wilds', this.zones['outer-wilds'].name);
             this.entities.jumpGates.push(gateToOuterWilds);
             this.scene.add(gateToOuterWilds.mesh);
         } else if (zoneId === 'outer-wilds') {
@@ -452,15 +460,15 @@ export class SpaceCargoGame {
             this.spawnDerelicts(5); // More derelicts in dangerous space
             
             // Add multiple pirate stations in Outer Wilds (high threat)
-            const pirateStation2 = new PirateStation(400, -500, CSS2DObject);
-            const pirateStation3 = new PirateStation(-300, 600, CSS2DObject);
+const pirateStation2 = new PirateStation(new THREE.Vector3(400, -500, 0));
+const pirateStation3 = new PirateStation(new THREE.Vector3(-300, 600, 0));
             this.entities.pirateStations.push(pirateStation2);
             this.entities.pirateStations.push(pirateStation3);
             this.scene.add(pirateStation2.mesh);
             this.scene.add(pirateStation3.mesh);
             
             // Jump gate back to alpha sector
-            const gateToAlphaSector = new JumpGate(-800, 0, 'alpha-sector', this.zones['alpha-sector'].name, CSS2DObject);
+const gateToAlphaSector = new JumpGate(-800, 0, 'alpha-sector', this.zones['alpha-sector'].name);
             this.entities.jumpGates.push(gateToAlphaSector);
             this.scene.add(gateToAlphaSector.mesh);
         }
@@ -1107,27 +1115,7 @@ export class SpaceCargoGame {
     }
     
     // REMOVED: Old economyDebug update call
-    if (this.miningLaser && this.miningLaser.isActive) {
-      // If player or asteroid moves, laser needs to be updated
-      // For simplicity, we re-check the closest asteroid if laser is active.
-      // A more robust way would be to store the target asteroid.
-      let targetAsteroid = null;
-      let minDist = Infinity;
-      this.entities.asteroids.forEach(ast => {
-        const dist = this.playerShip.mesh.position.distanceTo(ast.mesh.position);
-        if (dist < (ast.size + 15) && dist < minDist) {
-            minDist = dist;
-            targetAsteroid = ast;
-        }
-      });
-      if (targetAsteroid) {
-        this.miningLaser.updatePositions(this.playerShip.mesh.position, targetAsteroid.mesh.position);
-        // Continue mining logic (damage, collection) could also be here if M is held
-      } else {
-        this.miningLaser.deactivate(); // Target lost
-      }
-      this.miningLaser.update(); // For animation like pulsing
-    }
+    // Mining laser code removed: player no longer mines
     
     // REMOVED: Random pirate spawning - pirates now only spawn from pirate stations
     
