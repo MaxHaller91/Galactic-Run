@@ -1,5 +1,6 @@
 # Manual backups folder (we'll use Git instead)
 backups/
+Backups/
 
 # Node modules (if we add npm packages later)
 node_modules/
@@ -21,6 +22,7 @@ Thumbs.db
 *.tmp
 *.temp
 *~
+*.zip
 
 # Log files
 *.log
