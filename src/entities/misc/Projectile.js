@@ -15,7 +15,7 @@ export class Projectile {
     const size = 0.2 + (weaponLevel - 1) * 0.05;
     const color = isPlayerProjectile ? 0x00dd88 : 0xff4400;
     const geometry = new THREE.SphereGeometry(size, 6, 6);
-    const material = new THREE.MeshBasicMaterial({ color: color });
+    const material = new THREE.MeshBasicMaterial({ color });
     return new THREE.Mesh(geometry, material);
   }
 

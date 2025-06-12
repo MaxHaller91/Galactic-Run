@@ -11,13 +11,20 @@ import { JumpGate } from './src/entities/misc/JumpGate.js';
 import { Projectile } from './src/entities/misc/Projectile.js';
 import { DistressBeacon } from './src/entities/misc/DistressBeacon.js';
 import { EconomicEngine } from './src/entities/misc/EconomicEngine.js';
-// TODO: Move remaining imports (TradingShip, SimplePirate, SimplePolice, SimpleFriendlyShip) to new locations
+import { TradingShip } from './src/entities/ships/TradingShip.js';
+import { SimplePirate } from './src/entities/ships/SimplePirate.js';
+import { SimplePolice } from './src/entities/ships/SimplePolice.js';
+import { SimpleFriendlyShip } from './src/entities/ships/SimpleFriendlyShip.js';
+// PlayerShip is imported from 'ship'
 // REMOVED: Complex COMMODITIES_LIST - using simple materials/goods system
 // REMOVED: MiningLaser - conflicts with AI mining system
 import { Minimap } from 'minimap'; // Import the Minimap class
 import { WeaponSystem, WEAPON_TYPES } from 'weapons'; // Import the new weapon system
 import { DebugSystem } from 'debug'; // Import the debug system
 import { ZoneEventLogger } from 'zoneEventLogger'; // Import the event logger
+import { EconomySystem } from './src/systems/EconomySystem.js';
+import { AISystem } from './src/systems/AISystem.js';
+import { UISystem } from './src/systems/UISystem.js';
 export class SpaceCargoGame {
   constructor() {
     this.scene = new THREE.Scene();
@@ -88,6 +95,9 @@ export class SpaceCargoGame {
     this.weaponSystem = null; // Initialize weapon system reference
     this.eventLogger = null; // Initialize event logger reference
     this.timeScale = 1.0; // Add time scale property
+    this.economySystem = null; // Will be initialized in init()
+    this.aiSystem = null; // Will be initialized in init()
+    this.uiSystem = null; // Will be initialized in init()
     
     this.keys = {};
     this.mouseScreenPosition = new THREE.Vector2();
@@ -111,6 +121,9 @@ export class SpaceCargoGame {
     
     // Initialize Economic Engine for Rosebud trading system
     this.economicEngine = new EconomicEngine(this.entities.stations, this.entities.tradingShips);
+    this.economySystem = new EconomySystem(this.entities, this.availableOrders, this.economicEngine);
+    this.aiSystem = new AISystem(this.entities, this);
+    this.uiSystem = new UISystem(this.ui, this.entities);
     // Player ship is created in loadZone, ensure it exists before minimap init uses it
     // For now, minimap constructor handles if playerShip is null initially.
     // A safer approach would be to initialize minimap after playerShip is guaranteed.
@@ -915,14 +928,15 @@ const gateToAlphaSector = new JumpGate(-800, 0, 'alpha-sector', this.zones['alph
       });
     }
 
-    // Update pirates - filter out undefined/null values first
-    this.entities.pirates = this.entities.pirates.filter(pirate => pirate && pirate.mesh);
-    this.entities.pirates.forEach(pirate => {
-      pirate.update(scaledDeltaTime, this); // Use new Simple class signature
-    });
-    
+    // Update AI system (pirates, traders, etc.)
+    if (this.aiSystem) {
+      this.aiSystem.update(scaledDeltaTime);
+    }
+
     // Update projectiles
     this.entities.projectiles = this.entities.projectiles.filter(projectile => {
+      // Defensive: skip undefined or missing mesh
+      if (!projectile || !projectile.mesh || !projectile.update) return false;
       // Update projectile with game reference for enhanced features
       if (projectile.update) {
         projectile.update(scaledDeltaTime, this);
@@ -941,6 +955,7 @@ const gateToAlphaSector = new JumpGate(-800, 0, 'alpha-sector', this.zones['alph
         // Check pirate hits
         for (let i = this.entities.pirates.length - 1; i >= 0; i--) {
           const pirate = this.entities.pirates[i];
+          if (!pirate || !pirate.mesh) continue;
           let hit = false;
           
           // Use enhanced collision detection if available
@@ -992,6 +1007,7 @@ const gateToAlphaSector = new JumpGate(-800, 0, 'alpha-sector', this.zones['alph
         // Check friendly ship hits
         for (let i = this.entities.friendlyShips.length - 1; i >= 0; i--) {
           const friendlyShip = this.entities.friendlyShips[i];
+          if (!friendlyShip || !friendlyShip.mesh) continue;
           const distance = projectile.mesh.position.distanceTo(friendlyShip.mesh.position);
           if (distance < 3) {
             const destroyed = friendlyShip.takeDamage(10);
@@ -1009,6 +1025,7 @@ const gateToAlphaSector = new JumpGate(-800, 0, 'alpha-sector', this.zones['alph
         // Check police hits
         for (let i = this.entities.police.length - 1; i >= 0; i--) {
           const police = this.entities.police[i];
+          if (!police || !police.mesh) continue;
           const distance = projectile.mesh.position.distanceTo(police.mesh.position);
           if (distance < 3) {
             const destroyed = police.takeDamage(10);
@@ -1048,11 +1065,13 @@ const gateToAlphaSector = new JumpGate(-800, 0, 'alpha-sector', this.zones['alph
       pirateStation.update(scaledDeltaTime, this);
     });
     
-    // Update stations with new SimpleStation system
+    // Update stations and economy system
+    if (this.economySystem) {
+      this.economySystem.update(scaledDeltaTime, this);
+    }
+
+    // Update station labels with live stats
     this.entities.stations.forEach(station => {
-      station.update(scaledDeltaTime, this);
-      
-      // Update station labels with live stats
       if (station.labelElement) {
         const efficiency = Math.round(station.efficiency * 100);
         const materials = Math.floor(station.resources.materials);
@@ -1077,7 +1096,7 @@ const gateToAlphaSector = new JumpGate(-800, 0, 'alpha-sector', this.zones['alph
         `;
       }
     });
-    
+
     // Update traders for economy circulation (Rosebud system)
     if (this.entities.tradingShips) {
       this.entities.tradingShips = this.entities.tradingShips.filter(trader => {
@@ -1124,7 +1143,9 @@ const gateToAlphaSector = new JumpGate(-800, 0, 'alpha-sector', this.zones['alph
       this.gameState.shields = Math.min(100, this.gameState.shields + deltaTime * 5);
     }
     
-    this.ui.update();
+    if (this.uiSystem) {
+      this.uiSystem.update();
+    }
     if (this.minimap) {
         this.minimap.update();
     }
@@ -1243,6 +1264,14 @@ const gateToAlphaSector = new JumpGate(-800, 0, 'alpha-sector', this.zones['alph
     this.renderer.render(this.scene, this.camera);
     this.labelRenderer.render(this.scene, this.camera); 
   }
+
+  // Helper to spawn a pirate at a given position
+  spawnPirate(x, y) {
+    const pirate = new SimplePirate(x, y);
+    this.entities.pirates.push(pirate);
+    this.scene.add(pirate.mesh);
+  }
+
   // Ensure playerShip is passed to minimap if it's created after minimap instance
   // (This is a bit of a patch; ideally, minimap gets playerShip ref once available)
   // For now, the minimap's update method checks for playerShip's existence.

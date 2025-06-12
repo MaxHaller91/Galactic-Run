@@ -1,0 +1,21 @@
+{
+  "type": "module",
+  "devDependencies": {
+    "@playwright/test": "^1.53.0",
+    "husky": "^9.1.7",
+    "eslint": "^8.56.0",
+    "prettier": "^3.5.3",
+    "lint-staged": "^16.1.0",
+    "eslint-config-airbnb-base": "^15.0.0",
+    "eslint-plugin-import": "^2.29.1"
+  },
+  "scripts": {
+    "test:smoke": "playwright test --config=playwright.config.js"
+  },
+  "lint-staged": {
+    "src/**/*.js": [
+      "eslint --fix",
+      "prettier --write"
+    ]
+  }
+}

@@ -1,4 +1,4 @@
-import { TradingShip } from './entities.js';
+import { TradingShip } from './src/entities/ships/TradingShip.js';
 
 /**
  * Debug System for Space Cargo Commander
