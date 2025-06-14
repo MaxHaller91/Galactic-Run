@@ -82,17 +82,13 @@ export class SimplePolice {
     if (!stations.length) return;
 
     // 1️⃣ Look for pirates endangering ANY station
-    const pirate = this.findThreat(game);
-    if (pirate) {
-      if (this.targetPirate !== pirate) {
-        this.targetPirate = pirate;
-        dbg(this, `target→ ${pirate.id}`);
-      }
-      if (this.state !== 'INTERCEPT') {
-        this.state = 'INTERCEPT';
-        dbg(this, '→ INTERCEPT');
-      }
-      return;
+    const newTarget = this.findThreat(game);
+    if (newTarget) {
+      this.targetPirate = newTarget;
+      this.state = 'INTERCEPT';
+      dbg(this, `target→ ${newTarget.id}`);
+      dbg(this, '→ INTERCEPT');
+      return; // skip patrol drift
     }
 
     // 2️⃣ Navigate toward current patrol station
