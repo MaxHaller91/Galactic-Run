@@ -104,17 +104,21 @@ export class TradingShip {
       return;
     }
 
-    // Pick closest order
-    let bestOrder = null;
-    let bestDistance = Infinity;
+    // Prioritize orders based on commodity type
+    const COMMODITY_PRIORITY = { materials: 0, food: 1, funding: 2 };
 
-    viableOrders.forEach((order) => {
-      const distance = this.mesh.position.distanceTo(order.station.mesh.position);
-      if (distance < bestDistance) {
-        bestDistance = distance;
-        bestOrder = order;
-      }
+    // Sort orders by priority, then by distance if priorities are equal
+    viableOrders.sort((a, b) => {
+      const pa = COMMODITY_PRIORITY[a.resourceType] ?? 99;
+      const pb = COMMODITY_PRIORITY[b.resourceType] ?? 99;
+      if (pa !== pb) return pa - pb; // Higher priority first (lower number)
+      const distA = this.mesh.position.distanceTo(a.station.mesh.position);
+      const distB = this.mesh.position.distanceTo(b.station.mesh.position);
+      return distA - distB; // Fallback to closest distance
     });
+
+    // Pick the first order after sorting (highest priority and closest)
+    let bestOrder = viableOrders.length > 0 ? viableOrders[0] : null;
 
     if (bestOrder) {
       this.takeOrder(bestOrder);
