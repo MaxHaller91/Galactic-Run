@@ -7,7 +7,7 @@ export class PirateStation extends Station {
    * @param {THREE.Vector3} position
    * @param {Object}   [options]
    * @param {number}   [options.aggressionRadius=300]  Detection radius (px)
-   * @param {number}   [options.spawnCooldown=15]      Seconds between spawns
+   * @param {number}   [options.spawnCooldown=60]      Seconds between spawns
    * @param {Object}   [options.resources]             Starting stockpile
    */
   constructor(position, options = {}) {
@@ -37,7 +37,9 @@ export class PirateStation extends Station {
     this.spawnTimer += deltaTime;
     if (this.spawnTimer >= this.spawnCooldown) {
       this.spawnTimer = 0;
-      this.spawnPirate(game);
+      if (game.entities.pirates.length < 5) {
+        this.spawnPirate(game);
+      }
     }
   }
 

@@ -3,8 +3,10 @@ import {
   POLICE_DEFENCE_RADIUS,
   POLICE_PATROL_HOLD,
   POLICE_SPEED,
-  POLICE_FIRE_RANGE
+  POLICE_FIRE_RANGE,
+  POLICE_BURST_SIZE
 } from '../../constants/PoliceAI.js';
+import { HomingMissile } from '../misc/HomingMissile.js';
 
 export class SimplePolice {
   constructor(x, y, game) {
@@ -91,17 +93,17 @@ export class SimplePolice {
   }
 
   intercept(deltaTime, game) {
-    // Lost or dead pirate → resume patrol
-    if (!this.targetPirate?.mesh.visible) {
+    const p = this.targetPirate;
+
+    if (!p || !p.mesh.visible || p.health <= 0) {
       this.targetPirate = null;
       this.state = 'PATROLLING';
       this.resumePatrolVelocity(game);
       return;
     }
 
-    const dist = this.position.distanceTo(this.targetPirate.mesh.position);
+    const dist = this.position.distanceTo(p.mesh.position);
 
-    // Pirate escaped bubble
     if (dist > POLICE_DEFENCE_RADIUS * 1.5) {
       this.targetPirate = null;
       this.state = 'PATROLLING';
@@ -109,15 +111,13 @@ export class SimplePolice {
       return;
     }
 
-    // FIRE-RANGE behaviour
     if (dist <= POLICE_FIRE_RANGE) {
-      this.velocity.set(0, 0); // Brake so we don’t orbit forever
-      this.fireAt(this.targetPirate);
+      this.velocity.set(0, 0); // Brake
+      this.fireAt(p, game); // Burst of 3 missiles
       return;
     }
 
-    // Otherwise keep closing
-    this.seek(this.targetPirate.mesh.position, POLICE_SPEED * 1.2, deltaTime);
+    this.seek(p.mesh.position, POLICE_SPEED * 1.2, deltaTime); // Close in
   }
 
   findThreat(game) {
@@ -141,13 +141,22 @@ export class SimplePolice {
     this.mesh.rotation.z = Math.atan2(dy, dx) + Math.PI / 2;
   }
 
-  fireAt(enemy) {
-    // Placeholder for firing logic - to be implemented if not already present
-    const currentTime = Date.now();
-    if (currentTime - this.lastShotTime >= this.fireRate) {
-      this.lastShotTime = currentTime;
-      console.log(`🔫 Police ship firing at pirate`);
-      // Implement actual damage logic here if needed
+  fireAt(enemy, game) {
+    const now = Date.now();
+    if (now - this.lastShotTime < this.fireRate) return;
+    this.lastShotTime = now;
+
+    for (let i = 0; i < POLICE_BURST_SIZE; i++) {
+      // Slight angle offset so missiles don’t overlap perfectly
+      const missile = new HomingMissile(
+        this.position.x,
+        this.position.y,
+        enemy,
+        /* speed   */ 30,
+        /* turnRate*/ 0.12 + i * 0.01
+      );
+      game.entities.projectiles.push(missile);
+      game.scene.add(missile.mesh);
     }
   }
 
