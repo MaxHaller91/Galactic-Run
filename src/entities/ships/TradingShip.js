@@ -58,6 +58,9 @@ export class TradingShip {
       case 'DELIVERING':
         this.handleDelivery(game);
         break;
+      case 'RETURNING_TO_ORIGIN':
+        this.returnToOrigin(deltaTime);
+        break;
     }
 
     // Apply movement
@@ -314,6 +317,22 @@ export class TradingShip {
     }
   }
 
+  returnToOrigin(deltaTime) {
+    if (!this.target) {
+      this.state = 'SEEKING_ORDER';
+      return;
+    }
+
+    const distance = this.mesh.position.distanceTo(this.target.mesh.position);
+
+    if (distance < 15) {
+      this.state = 'SEEKING_ORDER'; // Now eligible for a fresh order
+      this.velocity.set(0, 0);
+    } else {
+      this.moveToward(this.target.mesh.position, deltaTime);
+    }
+  }
+
   handleDelivery(game) {
     if (this.actionTimer > 0) return; // Still unloading
 
@@ -341,9 +360,13 @@ export class TradingShip {
       // Delivering credits to a police station
       if (this.cargo.credits >= order.amount) {
         order.toStation.receiveCredits(order.amount);
-        this.cargo.credits = 0;
+        this.cargo = {}; // Wipe virtual cargo
         console.log(`💰 Trader delivered $${order.amount} to ${order.toStation.name || 'Police Station'} for funding`);
+        // NEW: return to origin, then ask for a new job
+        this.target = this.originStation;
+        this.setState('RETURNING_TO_ORIGIN');
         this.completeOrder(game, order);
+        return; // Don't fall through to generic completion
       } else {
         console.log(`❌ Couldn't deliver credits to ${order.toStation.name || 'Police Station'}`);
         this.abandonOrder(game);
