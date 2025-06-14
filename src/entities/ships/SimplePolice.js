@@ -85,10 +85,8 @@ export class SimplePolice {
     const newTarget = this.findThreat(game);
     if (newTarget) {
       this.targetPirate = newTarget;
-      this.state = 'INTERCEPT';
-      dbg(this, `target→ ${newTarget.id}`);
-      dbg(this, '→ INTERCEPT');
-      return; // skip patrol drift
+      this.setState('INTERCEPT');
+      return;
     }
 
     // 2️⃣ Navigate toward current patrol station
@@ -125,8 +123,7 @@ export class SimplePolice {
         dbg(this, 'target→ none');
       }
       if (this.state !== 'PATROLLING') {
-        this.state = 'PATROLLING';
-        dbg(this, '→ PATROLLING');
+        this.setState('PATROLLING');
       }
       this.resumePatrolVelocity(game);
       return;
@@ -140,15 +137,14 @@ export class SimplePolice {
         dbg(this, 'target→ none');
       }
       if (this.state !== 'PATROLLING') {
-        this.state = 'PATROLLING';
-        dbg(this, '→ PATROLLING');
+        this.setState('PATROLLING');
       }
       this.resumePatrolVelocity(game);
       return;
     }
 
     if (dist <= POLICE_FIRE_RANGE) {
-      this.velocity.set(0, 0); // Brake
+      this.velocity.multiplyScalar(0.8); // Brake gently
       this.fireAt(p, game); // Burst of 3 missiles
       return;
     }
