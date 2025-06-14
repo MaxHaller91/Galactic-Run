@@ -8,6 +8,20 @@ import {
 } from '../../constants/PoliceAI.js';
 import { EnhancedProjectile, WEAPON_TYPES } from 'weapons';
 
+const POLICE_DEBUG = true; // flip to false to silence logs
+
+function dbg(ship, msg = '') {
+  if (!POLICE_DEBUG) return;
+  const v = ship.velocity.length().toFixed(1);
+  console.log(
+    `[P${ship.id}]`,                  // unique id required
+    `state:${ship.state}`,
+    `vel:${v}`,
+    `tgt:${ship.targetPirate ? ship.targetPirate.id : 'none'}`,
+    msg
+  );
+}
+
 export class SimplePolice {
   constructor(x, y, game) {
     this.mesh = this.createMesh();
@@ -19,12 +33,14 @@ export class SimplePolice {
     this.maxHealth = 60;
     this.faction = 'police';
     this.game = game;
+    this.id = Math.floor(Math.random() * 1000); // Unique ID for debugging
     this.state = 'PATROLLING';
     this.patrolIndex = 0; // Current station index
     this.holdTimer = 0;
     this.targetPirate = null;
     this.lastShotTime = 0;
     this.fireRate = 400;
+    dbg(this, 'spawned');
   }
 
   createMesh() {
@@ -53,6 +69,13 @@ export class SimplePolice {
     }
     this.mesh.position.x += this.velocity.x * deltaTime;
     this.mesh.position.y += this.velocity.y * deltaTime;
+    
+    // Optional heartbeat for periodic status
+    this._dbgT = (this._dbgT || 0) + deltaTime;
+    if (POLICE_DEBUG && this._dbgT > 1.0) {
+      dbg(this); // 1-sec snapshot
+      this._dbgT = 0;
+    }
   }
 
   patrol(deltaTime, game) {
@@ -62,8 +85,14 @@ export class SimplePolice {
     // 1️⃣ Look for pirates endangering ANY station
     const pirate = this.findThreat(game);
     if (pirate) {
-      this.targetPirate = pirate;
-      this.state = 'INTERCEPT';
+      if (this.targetPirate !== pirate) {
+        this.targetPirate = pirate;
+        dbg(this, `target→ ${pirate.id}`);
+      }
+      if (this.state !== 'INTERCEPT') {
+        this.state = 'INTERCEPT';
+        dbg(this, '→ INTERCEPT');
+      }
       return;
     }
 
@@ -96,8 +125,14 @@ export class SimplePolice {
     const p = this.targetPirate;
 
     if (!p || !p.mesh.visible || p.health <= 0) {
-      this.targetPirate = null;
-      this.state = 'PATROLLING';
+      if (this.targetPirate !== null) {
+        this.targetPirate = null;
+        dbg(this, 'target→ none');
+      }
+      if (this.state !== 'PATROLLING') {
+        this.state = 'PATROLLING';
+        dbg(this, '→ PATROLLING');
+      }
       this.resumePatrolVelocity(game);
       return;
     }
@@ -105,8 +140,14 @@ export class SimplePolice {
     const dist = this.position.distanceTo(p.mesh.position);
 
     if (dist > POLICE_DEFENCE_RADIUS * 1.5) {
-      this.targetPirate = null;
-      this.state = 'PATROLLING';
+      if (this.targetPirate !== null) {
+        this.targetPirate = null;
+        dbg(this, 'target→ none');
+      }
+      if (this.state !== 'PATROLLING') {
+        this.state = 'PATROLLING';
+        dbg(this, '→ PATROLLING');
+      }
       this.resumePatrolVelocity(game);
       return;
     }
