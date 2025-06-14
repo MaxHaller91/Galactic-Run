@@ -6,6 +6,7 @@ import { UIManager } from 'ui';
 // Entities split imports
 import { Station } from './entities/stations/Station.js';
 import { PirateStation } from './entities/stations/PirateStation.js';
+import { PoliceStation } from './entities/stations/PoliceStation.js';
 import { Asteroid } from './entities/misc/Asteroid.js';
 import { JumpGate } from './entities/misc/JumpGate.js';
 import { Projectile } from './entities/misc/Projectile.js';
@@ -346,6 +347,11 @@ export class SpaceCargoGame {
 const pirateStation1 = new PirateStation(new THREE.Vector3(-700, -300, 0));
             this.entities.pirateStations.push(pirateStation1);
             this.scene.add(pirateStation1.mesh);
+            
+            // Add police station in Alpha Sector
+const hq = new PoliceStation(new THREE.Vector3(0, -50, 0));
+            this.entities.stations.push(hq);
+            this.scene.add(hq.mesh);
             
             // Jump gate positioned at zone edge
 const gateToOuterWilds = new JumpGate(800, 0, 'outer-wilds', this.zones['outer-wilds'].name);
