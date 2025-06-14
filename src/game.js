@@ -130,6 +130,43 @@ export class SpaceCargoGame {
     // A safer approach would be to initialize minimap after playerShip is guaranteed.
     // Let's assume loadZone creates playerShip before this.minimap is used in update loop.
     this.minimap = new Minimap('minimapContainer', this.entities, this.playerShip, this.camera, 150, 2000);
+    
+    // Add zoom functionality with mouse scroll wheel
+    // --- ZOOM CONSTANTS -------------------------------------------------
+    const MIN_ZOOM = 0.2;     // for OrthographicCamera.zoom   (default = 1)
+    const MAX_ZOOM = 5;
+    const MIN_Z    = 50;      // for PerspectiveCamera.position.z
+    const MAX_Z    = 2000;
+
+    // --- WHEEL HANDLER --------------------------------------------------
+    window.addEventListener(
+      'wheel',
+      (e) => {
+        e.preventDefault();               // stop the page from scrolling
+
+        // How much the wheel moved;  +1 = zoom out,  -1 = zoom in
+        const dir = Math.sign(e.deltaY);
+
+        if (this.camera.isOrthographicCamera) {
+          // ── Ortho: tweak .zoom, then tell the camera to update itself
+          this.camera.zoom = THREE.MathUtils.clamp(
+            this.camera.zoom + dir * 0.25,     // adjust step size to taste
+            MIN_ZOOM,
+            MAX_ZOOM
+          );
+          this.camera.updateProjectionMatrix();
+        } else {
+          // ── Perspective: move the camera forward/backward along Z
+          this.camera.position.z = THREE.MathUtils.clamp(
+            this.camera.position.z + dir * 30, // adjust step size to taste
+            MIN_Z,
+            MAX_Z
+          );
+        }
+      },
+      { passive: false }                  // required so preventDefault() works
+    );
+    
     this.animate();
   }
 
