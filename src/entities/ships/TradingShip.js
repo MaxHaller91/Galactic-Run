@@ -319,15 +319,21 @@ export class TradingShip {
 
   returnToOrigin(deltaTime) {
     if (!this.target) {
-      this.state = 'SEEKING_ORDER';
+      this.setState('SEEKING_ORDER');
       return;
     }
 
-    const distance = this.mesh.position.distanceTo(this.target.mesh.position);
+    const dist = this.mesh.position.distanceTo(this.target.mesh.position);
 
-    if (distance < 15) {
-      this.state = 'SEEKING_ORDER'; // Now eligible for a fresh order
+    if (dist < 15) {
+      // Arrived – NOW close out the FUND_POLICE job
+      if (this.currentOrder?.type === ORDER_TYPE.FUND_POLICE) {
+        this.completeOrder(this.originStation.game, this.currentOrder);
+        this.currentOrder = null;
+        this.originStation = null;
+      }
       this.velocity.set(0, 0);
+      this.setState('SEEKING_ORDER');
     } else {
       this.moveToward(this.target.mesh.position, deltaTime);
     }
@@ -362,11 +368,10 @@ export class TradingShip {
         order.toStation.receiveCredits(order.amount);
         this.cargo = {}; // Wipe virtual cargo
         console.log(`💰 Trader delivered $${order.amount} to ${order.toStation.name || 'Police Station'} for funding`);
-        // NEW: return to origin, then ask for a new job
+        // Head home – DO *NOT* complete order yet
         this.target = this.originStation;
         this.setState('RETURNING_TO_ORIGIN');
-        this.completeOrder(game, order);
-        return; // Don't fall through to generic completion
+        return;
       } else {
         console.log(`❌ Couldn't deliver credits to ${order.toStation.name || 'Police Station'}`);
         this.abandonOrder(game);

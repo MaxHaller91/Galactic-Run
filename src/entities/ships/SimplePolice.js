@@ -2,7 +2,8 @@ import * as THREE from 'three';
 import {
   POLICE_DEFENCE_RADIUS,
   POLICE_PATROL_HOLD,
-  POLICE_SPEED
+  POLICE_SPEED,
+  POLICE_FIRE_RANGE
 } from '../../constants/PoliceAI.js';
 
 export class SimplePolice {
@@ -81,26 +82,42 @@ export class SimplePolice {
     }
   }
 
+  // Helper – point back toward next patrol so we don’t freeze
+  resumePatrolVelocity(game) {
+    const sts = game.entities.stations;
+    if (!sts.length) return;
+    const dest = sts[this.patrolIndex % sts.length].mesh.position;
+    this.seek(dest, POLICE_SPEED, 0); // dt 0 → just sets velocity
+  }
+
   intercept(deltaTime, game) {
-    if (!this.targetPirate || !this.targetPirate.mesh.visible) {
+    // Lost or dead pirate → resume patrol
+    if (!this.targetPirate?.mesh.visible) {
+      this.targetPirate = null;
       this.state = 'PATROLLING';
+      this.resumePatrolVelocity(game);
       return;
     }
 
     const dist = this.position.distanceTo(this.targetPirate.mesh.position);
 
-    // Fall back if pirate left defence radius
+    // Pirate escaped bubble
     if (dist > POLICE_DEFENCE_RADIUS * 1.5) {
+      this.targetPirate = null;
       this.state = 'PATROLLING';
+      this.resumePatrolVelocity(game);
       return;
     }
 
-    // Close in & shoot
-    if (dist > 5) {
-      this.seek(this.targetPirate.mesh.position, POLICE_SPEED * 1.2, deltaTime);
-    } else {
+    // FIRE-RANGE behaviour
+    if (dist <= POLICE_FIRE_RANGE) {
+      this.velocity.set(0, 0); // Brake so we don’t orbit forever
       this.fireAt(this.targetPirate);
+      return;
     }
+
+    // Otherwise keep closing
+    this.seek(this.targetPirate.mesh.position, POLICE_SPEED * 1.2, deltaTime);
   }
 
   findThreat(game) {
