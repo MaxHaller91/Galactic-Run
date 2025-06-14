@@ -42,6 +42,13 @@ export class SimplePolice {
     dbg(this, 'spawned');
   }
 
+  setState(newState) {
+    if (this.state !== newState) {
+      this.state = newState;
+      dbg(this, '→ ' + newState);
+    }
+  }
+
   createMesh() {
     const group = new THREE.Group();
     const hullGeometry = new THREE.ConeGeometry(0.6, 3, 4);
