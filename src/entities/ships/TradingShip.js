@@ -59,7 +59,7 @@ export class TradingShip {
         this.handleDelivery(game);
         break;
       case 'RETURNING_TO_ORIGIN':
-        this.returnToOrigin(deltaTime);
+        this.returnToOrigin(deltaTime, game);
         break;
     }
 
@@ -317,7 +317,7 @@ export class TradingShip {
     }
   }
 
-  returnToOrigin(deltaTime) {
+  returnToOrigin(deltaTime, game) {
     if (!this.target) {
       this.setState('SEEKING_ORDER');
       return;
@@ -326,14 +326,14 @@ export class TradingShip {
     const dist = this.mesh.position.distanceTo(this.target.mesh.position);
 
     if (dist < 15) {
-      // Arrived – NOW close out the FUND_POLICE job
+      // Arrived at origin ⇒ NOW finalise the FUND_POLICE order
       if (this.currentOrder?.type === ORDER_TYPE.FUND_POLICE) {
-        this.completeOrder(this.originStation.game, this.currentOrder);
-        this.currentOrder = null;
-        this.originStation = null;
+        this.completeOrder(game, this.currentOrder);
       }
       this.velocity.set(0, 0);
-      this.setState('SEEKING_ORDER');
+      this.state = 'SEEKING_ORDER';
+      this.currentOrder = null;
+      this.originStation = null;
     } else {
       this.moveToward(this.target.mesh.position, deltaTime);
     }
@@ -368,10 +368,9 @@ export class TradingShip {
         order.toStation.receiveCredits(order.amount);
         this.cargo = {}; // Wipe virtual cargo
         console.log(`💰 Trader delivered $${order.amount} to ${order.toStation.name || 'Police Station'} for funding`);
-        // Head home – DO *NOT* complete order yet
         this.target = this.originStation;
         this.setState('RETURNING_TO_ORIGIN');
-        return;
+        return; // completeOrder is now done back home
       } else {
         console.log(`❌ Couldn't deliver credits to ${order.toStation.name || 'Police Station'}`);
         this.abandonOrder(game);
