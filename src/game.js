@@ -4,17 +4,17 @@ import { CSS2DRenderer, CSS2DObject } from 'three/renderers/CSS2DRenderer.js';
 import { PlayerShip } from 'ship';
 import { UIManager } from 'ui';
 // Entities split imports
-import { Station } from './src/entities/stations/Station.js';
-import { PirateStation } from './src/entities/stations/PirateStation.js';
-import { Asteroid } from './src/entities/misc/Asteroid.js';
-import { JumpGate } from './src/entities/misc/JumpGate.js';
-import { Projectile } from './src/entities/misc/Projectile.js';
-import { DistressBeacon } from './src/entities/misc/DistressBeacon.js';
-import { EconomicEngine } from './src/entities/misc/EconomicEngine.js';
-import { TradingShip } from './src/entities/ships/TradingShip.js';
-import { SimplePirate } from './src/entities/ships/SimplePirate.js';
-import { SimplePolice } from './src/entities/ships/SimplePolice.js';
-import { SimpleFriendlyShip } from './src/entities/ships/SimpleFriendlyShip.js';
+import { Station } from './entities/stations/Station.js';
+import { PirateStation } from './entities/stations/PirateStation.js';
+import { Asteroid } from './entities/misc/Asteroid.js';
+import { JumpGate } from './entities/misc/JumpGate.js';
+import { Projectile } from './entities/misc/Projectile.js';
+import { DistressBeacon } from './entities/misc/DistressBeacon.js';
+import { EconomicEngine } from './entities/misc/EconomicEngine.js';
+import { TradingShip } from './entities/ships/TradingShip.js';
+import { SimplePirate } from './entities/ships/SimplePirate.js';
+import { SimplePolice } from './entities/ships/SimplePolice.js';
+import { SimpleFriendlyShip } from './entities/ships/SimpleFriendlyShip.js';
 // PlayerShip is imported from 'ship'
 // REMOVED: Complex COMMODITIES_LIST - using simple materials/goods system
 // REMOVED: MiningLaser - conflicts with AI mining system
@@ -22,9 +22,9 @@ import { Minimap } from 'minimap'; // Import the Minimap class
 import { WeaponSystem, WEAPON_TYPES } from 'weapons'; // Import the new weapon system
 import { DebugSystem } from 'debug'; // Import the debug system
 import { ZoneEventLogger } from 'zoneEventLogger'; // Import the event logger
-import { EconomySystem } from './src/systems/EconomySystem.js';
-import { AISystem } from './src/systems/AISystem.js';
-import { UISystem } from './src/systems/UISystem.js';
+import { EconomySystem } from './systems/EconomySystem.js';
+import { AISystem } from './systems/AISystem.js';
+import { UISystem } from './systems/UISystem.js';
 export class SpaceCargoGame {
   constructor() {
     this.scene = new THREE.Scene();
