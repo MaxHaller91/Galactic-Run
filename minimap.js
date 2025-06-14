@@ -30,7 +30,8 @@ export class Minimap {
             friendlyShip: '#FFFF00', // Yellow
             police: '#0088FF',       // Blue
             miningShip: '#FF8800',   // Orange
-            tradingShip: '#FFaa00'   // Gold/Orange for traders
+            tradingShip: '#FFaa00',  // Gold/Orange for traders
+            pirateStation: '#AA0000' // Dark Red for pirate stations
         };
         this.dotSizes = { // Radius in pixels
             player: 3,
@@ -41,7 +42,8 @@ export class Minimap {
             friendlyShip: 2,
             police: 2,
             miningShip: 2,
-            tradingShip: 2
+            tradingShip: 2,
+            pirateStation: 4
         };
         this.filters = {
             asteroids: true, // Default to true as checkbox is checked initially
@@ -133,6 +135,12 @@ export class Minimap {
         if (this.filters.traders && this.entities.tradingShips) {
             this.entities.tradingShips.forEach(trader => {
                 this.drawEntityDot(trader, this.dotColors.tradingShip, this.dotSizes.tradingShip);
+            });
+        }
+        // Draw pirate stations (conditionally using the same filter as stations)
+        if (this.filters.stations && this.entities.pirateStations) {
+            this.entities.pirateStations.forEach(station => {
+                this.drawEntityDot(station, this.dotColors.pirateStation, this.dotSizes.pirateStation);
             });
         }
         // Draw asteroids (conditionally)
