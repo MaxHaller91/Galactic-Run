@@ -52,7 +52,7 @@ export class PoliceStation extends Station {
     const dist  = 10;
     const x = this.position.x + Math.cos(angle) * dist;
     const y = this.position.y + Math.sin(angle) * dist;
-    const ship = new SimplePolice(x, y, game.entities.stations, 'police');
+    const ship = new SimplePolice(x, y, game);
     game.entities.police.push(ship);
     game.scene.add(ship.mesh);
   }
