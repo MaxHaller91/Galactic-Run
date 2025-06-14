@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { ORDER_TYPE } from '../../constants/OrderType.js';
 
 export class Station {
   constructor(type, position, resources, prices) {
@@ -86,6 +87,28 @@ export class Station {
       }
       if (this.resources.food > 80) {
         this.createSellOrder(game, 'food', 20, 35);
+      }
+    }
+    // Create FUND_POLICE orders if not a police station and credits are sufficient
+    if (this.type !== 'police' && this.credits >= 8000) {
+      const policeStation = game.entities.stations.find(s => s.type === 'police');
+      if (policeStation) {
+        const donationAmount = 5000;
+        this.credits -= donationAmount; // Immediate deduction as escrow
+        const order = {
+          id: `${this.name || 'Station'}_${Date.now()}_${Math.random()}`,
+          type: ORDER_TYPE.FUND_POLICE,
+          amount: donationAmount,
+          station: this,
+          toStation: policeStation,
+          stationName: this.name || 'Unknown Station',
+          created: Date.now(),
+          completed: false,
+          takenBy: null,
+        };
+        game.availableOrders.push(order);
+        this.myOrders.push(order);
+        console.log(`📤 ${this.name || 'Station'} created FUND_POLICE order for $${donationAmount}`);
       }
     }
   }

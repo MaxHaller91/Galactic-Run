@@ -27,13 +27,17 @@ export class PoliceStation extends Station {
     return mesh;
   }
 
-  /** Build a police ship every time we reach 100 000 cr. */
+  /** Build a police ship every time we reach 100 000 cr, up to a limit. */
   update(deltaTime, game) {
     super.update(deltaTime, game);
 
     if (this.credits >= 100_000) {
-      this.credits -= 100_000;
-      this.spawnPoliceShip(game);
+      // Count only alive police ships
+      const alivePoliceCount = game.entities.police.filter(ship => ship.mesh.visible).length;
+      if (alivePoliceCount < 10) {
+        this.credits -= 100_000;
+        this.spawnPoliceShip(game);
+      }
     }
   }
 

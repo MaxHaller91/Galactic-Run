@@ -1,5 +1,6 @@
 import * as THREE from 'three';
 import { safeDiv } from '../../util/Math.js';
+import { ORDER_TYPE } from '../../constants/OrderType.js';
 
 export class TradingShip {
   constructor(position, stations) {
@@ -135,13 +136,16 @@ export class TradingShip {
   }
 
   canHandleOrder(order) {
-    if (order.type === 'buy') {
+    if (order.type === ORDER_TYPE.BUY) {
       // For buy orders, check if we already have the resource
       if (this.cargo[order.resourceType] >= order.quantity) {
         return true; // We can fulfill immediately
       }
       // If we don't have it, check if we have space to source it
       return (this.cargo.materials + this.cargo.food + order.quantity) <= this.maxCargo;
+    } else if (order.type === ORDER_TYPE.FUND_POLICE) {
+      // For fund police orders, we can always handle them as it's virtual credits
+      return true;
     }
     // For sell orders, we need credits and cargo space
     return this.credits >= order.totalValue
@@ -152,10 +156,16 @@ export class TradingShip {
     this.currentOrder = order;
     order.takenBy = this;
 
-    if (order.type === 'sell') {
+    if (order.type === ORDER_TYPE.SELL) {
       // For sell orders, we go to pick up from the station
       this.target = order.station;
       this.state = 'TRAVELING_TO_PICKUP';
+    } else if (order.type === ORDER_TYPE.FUND_POLICE) {
+      // For fund police orders, load virtual credits immediately and go directly to delivery
+      this.cargo = { credits: order.amount };
+      this.originStation = order.station; // Store origin to potentially return later
+      this.target = order.toStation; // Set destination to police HQ
+      this.setState('TRAVELING_TO_DELIVERY');
     } else {
       // For buy orders, check if we already have the resource
       if (this.cargo[order.resourceType] >= order.quantity) {
@@ -226,7 +236,7 @@ export class TradingShip {
       return;
     }
 
-    if (order.type === 'sell') {
+    if (order.type === ORDER_TYPE.SELL) {
       // Handling pickup for SELL orders (traditional approach)
       if (order.station.sellResourceToTrader(order.resourceType, order.quantity)) {
         this.cargo[order.resourceType] += order.quantity;
@@ -239,7 +249,7 @@ export class TradingShip {
         console.log(`❌ Station ${order.stationName} couldn't provide ${order.resourceType}`);
         this.abandonOrder(game);
       }
-    } else if (order.type === 'buy') {
+    } else if (order.type === ORDER_TYPE.BUY) {
       // Handling pickup for BUY orders (sourcing goods to fulfill contract)
       if (this.target.sellResourceToTrader(order.resourceType, order.quantity)) {
         this.cargo[order.resourceType] += order.quantity;
@@ -313,7 +323,7 @@ export class TradingShip {
       return;
     }
 
-    if (order.type === 'buy') {
+    if (order.type === ORDER_TYPE.BUY) {
       // Delivering to a buy order
       if (this.cargo[order.resourceType] >= order.quantity && order.station.credits >= order.totalValue) {
         this.cargo[order.resourceType] -= order.quantity;
@@ -325,6 +335,17 @@ export class TradingShip {
         this.completeOrder(game, order);
       } else {
         console.log(`❌ Couldn't complete sale to ${order.stationName}`);
+        this.abandonOrder(game);
+      }
+    } else if (order.type === ORDER_TYPE.FUND_POLICE) {
+      // Delivering credits to a police station
+      if (this.cargo.credits >= order.amount) {
+        order.toStation.receiveCredits(order.amount);
+        this.cargo.credits = 0;
+        console.log(`💰 Trader delivered $${order.amount} to ${order.toStation.name || 'Police Station'} for funding`);
+        this.completeOrder(game, order);
+      } else {
+        console.log(`❌ Couldn't deliver credits to ${order.toStation.name || 'Police Station'}`);
         this.abandonOrder(game);
       }
     } else {
