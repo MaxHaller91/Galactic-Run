@@ -18,7 +18,7 @@ export class PirateStation extends Station {
       options.prices   || {}
     );
     this.aggressionRadius = options.aggressionRadius ?? 300;
-    this.spawnCooldown   = options.spawnCooldown   ?? 15;
+    this.spawnCooldown   = options.spawnCooldown   ?? 150;
     this.spawnTimer      = 0;
   }
 
