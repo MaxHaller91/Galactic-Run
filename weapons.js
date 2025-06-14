@@ -222,7 +222,7 @@ export class EnhancedProjectile {
     this.target = null; // For homing missiles
     
     // Special weapon behaviors
-    if (weaponType.homing && isPlayerProjectile) {
+    if (weaponType.homing) {
       this.setupHoming();
     }
   }
@@ -273,7 +273,7 @@ export class EnhancedProjectile {
 
   update(deltaTime, game) {
     // Homing behavior for missiles
-    if (this.weaponType.homing && this.isPlayerProjectile && !this.target) {
+    if (this.weaponType.homing && !this.target) {
       this.findTarget(game);
     }
 

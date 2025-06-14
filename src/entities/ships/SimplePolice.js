@@ -6,7 +6,7 @@ import {
   POLICE_FIRE_RANGE,
   POLICE_BURST_SIZE
 } from '../../constants/PoliceAI.js';
-import { HomingMissile } from '../misc/HomingMissile.js';
+import { EnhancedProjectile, WEAPON_TYPES } from 'weapons';
 
 export class SimplePolice {
   constructor(x, y, game) {
@@ -148,12 +148,17 @@ export class SimplePolice {
 
     for (let i = 0; i < POLICE_BURST_SIZE; i++) {
       // Slight angle offset so missiles don’t overlap perfectly
-      const missile = new HomingMissile(
+      const fireAngle = Math.atan2(
+        enemy.mesh.position.y - this.position.y,
+        enemy.mesh.position.x - this.position.x
+      ) + (i - 1) * 0.05;
+      const missile = new EnhancedProjectile(
         this.position.x,
         this.position.y,
-        enemy,
-        /* speed   */ 30,
-        /* turnRate*/ 0.12 + i * 0.01
+        fireAngle,
+        false,
+        WEAPON_TYPES.MISSILE,
+        true
       );
       game.entities.projectiles.push(missile);
       game.scene.add(missile.mesh);
