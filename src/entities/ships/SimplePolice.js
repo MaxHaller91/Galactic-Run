@@ -59,125 +59,75 @@ export class SimplePolice {
     return group;
   }
 
-  update(deltaTime, game) {
+  //-------------------------------------------------------------
+  // ─── constants ──────────────────────────────────────────────
+  SENSOR_RADIUS   = 400;
+  FIRE_RADIUS     = 120;
+
+  // ─── new persistent slots ───────────────────────────────────
+  state      = 'PATROL';   // PATROL | INTERCEPT | RESPOND
+  targetShip = null;       // pirate Entity
+  beaconPos  = null;       // THREE.Vector2
+
+  // ─── public update() override ───────────────────────────────
+  update(dt, game) {
     switch (this.state) {
-      case 'PATROLLING':
-        this.patrol(deltaTime, game);
+
+      case 'PATROL': {
+        if (game.activeBeacon) {
+          this.beaconPos = game.activeBeacon.position.clone();
+          this.state = 'RESPOND'; dbg(this,'→ RESPOND'); break;
+        }
+        const p = this.findNearestPirate(game);
+        if (p) { this.targetShip = p; this.state = 'INTERCEPT';
+                 dbg(this,'→ INTERCEPT tgt:'+p.id); break; }
+        this.patrolMove(dt);                              break;
+      }
+
+      case 'INTERCEPT': {
+        if (!this.targetShip || this.targetShip.destroyed) { this.reset(); break; }
+        const dist = this.seek(this.targetShip.mesh.position, dt);
+        if (dist < FIRE_RADIUS) this.fireAt(this.targetShip, game);
         break;
-      case 'INTERCEPT':
-        this.intercept(deltaTime, game);
+      }
+
+      case 'RESPOND': {
+        if (!game.activeBeacon) { this.reset(); break; }
+        const dist = this.seek(this.beaconPos, dt);
+        if (dist < SENSOR_RADIUS) {
+          const p = this.findNearestPirate(game);
+          if (p) { this.targetShip = p; this.state='INTERCEPT';
+                   dbg(this,'→ INTERCEPT tgt:'+p.id); }
+          else if (dist < 50) this.reset();
+        }
         break;
-    }
-    // Apply movement
-    this.velocity.multiplyScalar(0.8);
-    if (this.velocity.length() > this.maxSpeed) {
-      this.velocity.normalize().multiplyScalar(this.maxSpeed);
-    }
-    this.mesh.position.x += this.velocity.x * deltaTime;
-    this.mesh.position.y += this.velocity.y * deltaTime;
-    
-    // Optional heartbeat for periodic status
-    this._dbgT = (this._dbgT || 0) + deltaTime;
-    if (POLICE_DEBUG && this._dbgT > 1.0) {
-      dbg(this); // 1-sec snapshot
-      this._dbgT = 0;
-    }
-  }
-
-  patrol(deltaTime, game) {
-    const stations = game.entities.stations;
-    if (!stations.length) return;
-
-    // 1️⃣ Look for pirates endangering ANY station
-    const newTarget = this.findThreat(game);
-    if (newTarget) {
-      this.targetPirate = newTarget;
-      this.setState('INTERCEPT');
-      return;
-    }
-
-    // 2️⃣ Navigate toward current patrol station
-    const station = stations[this.patrolIndex % stations.length];
-    const dist = this.position.distanceTo(station.mesh.position);
-
-    if (dist > 5) {
-      this.seek(station.mesh.position, POLICE_SPEED, deltaTime);
-      return;
-    }
-
-    // 3️⃣ Arrived – hold for a bit then advance to next station
-    this.holdTimer += deltaTime;
-    if (this.holdTimer >= POLICE_PATROL_HOLD) {
-      this.holdTimer = 0;
-      this.patrolIndex++;
-    }
-  }
-
-  // Helper – point back toward next patrol so we don’t freeze
-  resumePatrolVelocity(game) {
-    const sts = game.entities.stations;
-    if (!sts.length) return;
-    const dest = sts[this.patrolIndex % sts.length].mesh.position;
-    this.seek(dest, POLICE_SPEED, 0); // dt 0 → just sets velocity
-  }
-
-  intercept(deltaTime, game) {
-    const p = this.targetPirate;
-
-    if (!p || !p.mesh.visible || p.health <= 0) {
-      if (this.targetPirate !== null) {
-        this.targetPirate = null;
-        dbg(this, 'target→ none');
       }
-      if (this.state !== 'PATROLLING') {
-        this.setState('PATROLLING');
-      }
-      this.resumePatrolVelocity(game);
-      return;
     }
-
-    const dist = this.position.distanceTo(p.mesh.position);
-
-    if (dist > POLICE_DEFENCE_RADIUS * 1.5) {
-      if (this.targetPirate !== null) {
-        this.targetPirate = null;
-        dbg(this, 'target→ none');
-      }
-      if (this.state !== 'PATROLLING') {
-        this.setState('PATROLLING');
-      }
-      this.resumePatrolVelocity(game);
-      return;
-    }
-
-    if (dist <= POLICE_FIRE_RANGE) {
-      this.velocity.multiplyScalar(0.8); // Brake gently
-      this.fireAt(p, game); // Burst of 3 missiles
-      return;
-    }
-
-    this.seek(p.mesh.position, POLICE_SPEED * 1.2, deltaTime); // Close in
   }
 
-  findThreat(game) {
-    const stations = game.entities.stations;
-    return game.entities.pirates.find(pirate =>
-      pirate.mesh.visible && stations.some(st =>
-        st.mesh.position.distanceTo(pirate.mesh.position) <= POLICE_DEFENCE_RADIUS
-      )
-    );
+  // ─── helpers ────────────────────────────────────────────────
+  findNearestPirate(game) {
+    let best=null, bestSq=SENSOR_RADIUS*SENSOR_RADIUS;
+    for (const p of game.entities.pirates)
+      if (!p.destroyed) {
+        const dSq = this.mesh.position.distanceToSquared(p.mesh.position);
+        if (dSq < bestSq) { best=p; bestSq=dSq; }
+      }
+    return best;
   }
 
-  seek(targetPos, speed, deltaTime) {
-    const dx = targetPos.x - this.mesh.position.x;
-    const dy = targetPos.y - this.mesh.position.y;
-    const dist = Math.sqrt(dx * dx + dy * dy);
-    if (dist > 1) {
-      const invDist = 1 / dist;
-      this.velocity.x += dx * invDist * speed * deltaTime * 3;
-      this.velocity.y += dy * invDist * speed * deltaTime * 3;
+  reset() { this.state='PATROL'; this.targetShip=null; this.beaconPos=null;
+            dbg(this,'→ PATROL'); }
+
+  seek(targetPos, dt) {
+    const dir = targetPos.clone().sub(this.mesh.position);
+    const dist = dir.length();
+    if (dist>1) {
+      dir.setLength(this.maxSpeed);
+      this.velocity.lerp(dir,0.1);
     }
-    this.mesh.rotation.z = Math.atan2(dy, dx) + Math.PI / 2;
+    this.mesh.position.addScaledVector(this.velocity, dt);
+    return dist;
   }
 
   fireAt(enemy, game) {
