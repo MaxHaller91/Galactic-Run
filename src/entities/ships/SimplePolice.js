@@ -13,13 +13,12 @@ const POLICE_DEBUG = true; // flip to false to silence logs
 function dbg(ship, msg = '') {
   if (!POLICE_DEBUG) return;
   const v = ship.velocity.length().toFixed(1);
-  console.log(
-    `[P${ship.id}]`,                  // unique id required
-    `state:${ship.state}`,
-    `vel:${v}`,
-    `tgt:${ship.targetPirate ? ship.targetPirate.id : 'none'}`,
-    msg
-  );
+  const text = `[P${ship.id}] state:${ship.state} vel:${v} tgt:${ship.targetPirate ? ship.targetPirate.id : 'none'} ${msg}`;
+  console.log(text);
+  // Route to Ctrl+L overlay if event logger is available
+  if (ship.game && ship.game.eventLogger && ship.game.eventLogger.logPolice) {
+    ship.game.eventLogger.logPolice(text);
+  }
 }
 
 export class SimplePolice {

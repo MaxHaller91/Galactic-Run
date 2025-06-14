@@ -75,11 +75,19 @@ export class TradingShip {
   forceReset() {
     console.log(`🔄 Trader force reset - was in ${this.state} with cargo: M:${this.cargo.materials} F:${this.cargo.food}`);
     this.resetToSeeking();
+    // Ensure cargo object structure is preserved
+    if (!this.cargo || typeof this.cargo !== 'object') {
+      this.cargo = { materials: 0, food: 0 };
+    }
   }
 
   resetToSeeking() {
     this.abandonOrder({ availableOrders: [] });
     this.stateTimer = 0;
+    // Ensure cargo object structure is preserved
+    if (!this.cargo || typeof this.cargo !== 'object') {
+      this.cargo = { materials: 0, food: 0 };
+    }
   }
 
   setState(newState) {
