@@ -16,6 +16,9 @@ export class AISystem {
     if (this.entities.tradingShips) {
       this.entities.tradingShips.forEach((trader) => trader.update && trader.update(dt, this.game));
     }
+    if (this.entities.pirateStations) {
+      this.entities.pirateStations.forEach((station) => station.update && station.update(dt, this.game));
+    }
     // Add more AI logic as needed
   }
 }
