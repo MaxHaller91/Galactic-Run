@@ -164,7 +164,7 @@ export class SimplePolice {
   }
 
   pickNextPatrolTarget() {
-    const stations = this.game.entities.stations;
+    const stations = (this.game.entities && this.game.entities.stations) || [];
     if (!stations || stations.length === 0) {
       // fallback: map centre
       this.patrolTarget = new THREE.Vector2(0, 0);
