@@ -16,7 +16,7 @@ import { TradingShip } from './entities/ships/TradingShip.js';
 import { SimplePirate } from './entities/ships/SimplePirate.js';
 import { SimplePolice } from './entities/ships/SimplePolice.js';
 import { SimpleFriendlyShip } from './entities/ships/SimpleFriendlyShip.js';
-import { PirateHunter } from './entities/ships/PirateHunter.js';
+import { PirateHunter } from 'pirateHunter';
 // PlayerShip is imported from 'ship'
 // REMOVED: Complex COMMODITIES_LIST - using simple materials/goods system
 // REMOVED: MiningLaser - conflicts with AI mining system

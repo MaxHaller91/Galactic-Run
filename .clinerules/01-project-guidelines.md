@@ -21,6 +21,28 @@
   - Prefer helper wrappers (`spawnStation`, `spawnPirate`, …) for repeated patterns.  
   - Helper must: create entity, set `name`, `type`, `faction`, push to array, add to scene.
 
+## Example:
+PLAN MODE:
+
+Goal  stop 404 on PirateHunter by committing the file and wiring import map.
+
+Steps
+1. ensure src/entities/ships/PirateHunter.js exists locally (the class we wrote).
+
+2. open index.html and in the importmap add:
+     "pirateHunter": "./src/entities/ships/PirateHunter.js",
+
+3. open game.js (or wherever you spawn hunters)
+     import { PirateHunter } from 'pirateHunter';
+
+4. git add index.html \
+         src/entities/ships/PirateHunter.js \
+         game.js
+   git commit -m "feat: wire PirateHunter into import map and game"
+   git push origin main
+
+
+
 ## 2. Station Handling
 - **Station Creation**  
   - Use `new Station(type, position, resources, prices, CSS2DObject)`  
@@ -78,6 +100,7 @@
 ## 7. Git & Rollback Discipline
 - Create a commit labeled `***stable***` before any multi-file Cline refactor.
 - Never `git reset --hard` in scripts; manual rollback only.
+- Update the game version number in `index.html` after each significant change to reflect the new version in the format "Galactic Run vX.Y.Z", incrementing the appropriate version component (major, minor, patch) based on the scope of the change.
 
 ---
 # End of rules
