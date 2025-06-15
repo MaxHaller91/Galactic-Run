@@ -386,8 +386,43 @@ export class DebugSystem {
         e.preventDefault();
         this.toggle();
       }
+      if (e.ctrlKey && e.key === 'P') {
+        e.preventDefault();
+        this.spawnPoliceNearPlayer();
+      }
     });
-  }
+  };
+
+  spawnTradingShips() {
+    const playerPos = this.game.playerShip.mesh.position;
+    
+    for (let i = 0; i < 2; i++) {
+      const angle = (i / 2) * Math.PI * 2;
+      const distance = 50 + Math.random() * 30;
+      const x = playerPos.x + Math.cos(angle) * distance;
+      const y = playerPos.y + Math.sin(angle) * distance;
+      
+      const spawnPos = new THREE.Vector3(x, y, 0);
+      const trader = new TradingShip(spawnPos, this.game.entities.stations);
+      
+      if (!this.game.entities.tradingShips) this.game.entities.tradingShips = [];
+      this.game.entities.tradingShips.push(trader);
+      this.game.scene.add(trader.mesh);
+    }
+    
+    this.game.ui.showMessage('Spawned 2 trading ships near player', 'system-neutral');
+  };
+
+  spawnPoliceNearPlayer() {
+    const playerPos = this.game.playerShip.mesh.position;
+    const angle = Math.random() * Math.PI * 2;
+    const distance = 30 + Math.random() * 20;
+    const x = playerPos.x + Math.cos(angle) * distance;
+    const y = playerPos.y + Math.sin(angle) * distance;
+    
+    this.game.spawnPoliceAt(x, y);
+    this.game.ui.showMessage('Spawned police ship near player', 'system-neutral');
+  };
 
   toggle() {
     if (this.isVisible) {
