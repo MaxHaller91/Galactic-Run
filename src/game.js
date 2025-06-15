@@ -393,12 +393,21 @@ const hq = new PoliceStation(new THREE.Vector3(0, -50, 0));
             this.entities.stations.push(hq);
             this.scene.add(hq.mesh);
             
-            // Spawn 10 PirateHunters at game start
+            // Spawn 10 PirateHunters at game start near random stations
+            console.log("🚀 SPAWNING 10 PIRATE HUNTER SHIPS");
             for (let i = 0; i < 10; i++) {
-                const h = new PirateHunter(0, 0, this);
+                let spawnX = 0, spawnY = 0;
+                if (this.entities.stations.length > 0) {
+                    const randomStation = this.entities.stations[Math.floor(Math.random() * this.entities.stations.length)];
+                    spawnX = randomStation.mesh.position.x + (Math.random() - 0.5) * 30;
+                    spawnY = randomStation.mesh.position.y + (Math.random() - 0.5) * 30;
+                    console.log(`📍 Pirate Hunter ${i+1} spawn position near ${randomStation.name || 'Station'}: x: ${spawnX}, y: ${spawnY}`);
+                }
+                const h = new PirateHunter(spawnX, spawnY, this);
                 this.entities.police.push(h);
                 this.scene.add(h.mesh);
             }
+            console.log(`🏁 SPAWN COMPLETE. Final Pirate Hunter count: ${this.entities.police.length}`);
             
             // Jump gate positioned at zone edge
 const gateToOuterWilds = new JumpGate(800, 0, 'outer-wilds', this.zones['outer-wilds'].name);
