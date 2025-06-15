@@ -69,13 +69,13 @@ export class SimplePolice {
     switch (this.state) {
 
       case 'PATROL': {
+        const p = this.findNearestPirate(game);
+        if (p) { this.targetShip = p; this.state = 'INTERCEPT';
+                 dbg(this,'→ INTERCEPT tgt:'+p.id); break; }
         if (game.activeBeacon) {
           this.beaconPos = game.activeBeacon.position.clone();
           this.state = 'RESPOND'; dbg(this,'→ RESPOND'); break;
         }
-        const p = this.findNearestPirate(game);
-        if (p) { this.targetShip = p; this.state = 'INTERCEPT';
-                 dbg(this,'→ INTERCEPT tgt:'+p.id); break; }
         this.patrolMove(dt);                              break;
       }
 
@@ -150,6 +150,9 @@ export class SimplePolice {
   }
 
   patrolMove(dt) {
+    if (this.mesh.position.length() > 1200) { // outside map
+      this.patrolTarget = new THREE.Vector2(0, 0);
+    }
     // lazily pick the first target
     if (!this.patrolTarget) this.pickNextPatrolTarget();
 
@@ -157,22 +160,24 @@ export class SimplePolice {
     const dist = this.seek(this.patrolTarget, dt);
 
     // arrived → choose next station
-    if (dist < 50) this.pickNextPatrolTarget();
+    if (dist < 40) this.pickNextPatrolTarget();
 
     // mild damping
-    this.velocity.multiplyScalar(0.9);
+    this.velocity.multiplyScalar(0.95);
   }
 
   pickNextPatrolTarget() {
-    const stations = (this.game.entities && this.game.entities.stations) || [];
-    if (!stations || stations.length === 0) {
+    const stations = this.game.entities?.stations ?? [];
+    if (stations.length === 0) {
       // fallback: map centre
       this.patrolTarget = new THREE.Vector2(0, 0);
       return;
     }
     this.patrolIndex = (this.patrolIndex + 1) % stations.length;
     const s = stations[this.patrolIndex];
-    this.patrolTarget = new THREE.Vector2(s.mesh.position.x, s.mesh.position.y);
+    const dir = new THREE.Vector2().subVectors(s.mesh.position, {x:0,y:0})
+                                   .setLength(300);  // 300-px ring
+    this.patrolTarget = s.mesh.position.clone().add(dir);
   }
 
   takeDamage(amount) {
