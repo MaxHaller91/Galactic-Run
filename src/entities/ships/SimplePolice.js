@@ -1,183 +1,192 @@
 import * as THREE from 'three';
-import {
-  POLICE_SPEED,
-  POLICE_FIRE_RANGE,
-  POLICE_BURST_SIZE
-} from '../../constants/PoliceAI.js';
-import { EnhancedProjectile, WEAPON_TYPES } from 'weapons';
-
-const POLICE_DEBUG = true; // flip to false to silence logs
-
-function dbg(ship, msg = '') {
-  if (!POLICE_DEBUG) return;
-  const v = ship.velocity.length().toFixed(1);
-  const text = `[P${ship.id}] state:${ship.state} vel:${v} tgt:${ship.targetShip ? ship.targetShip.id : 'none'} ${msg}`;
-  console.log(text);
-  // Route to Ctrl+L overlay if event logger is available
-  if (ship.game && ship.game.eventLogger && ship.game.eventLogger.logPolice) {
-    ship.game.eventLogger.logPolice(text);
-  }
-}
+import { Projectile } from '../misc/Projectile.js';
+import { safeDiv } from '../../util/Math.js';
 
 export class SimplePolice {
-  constructor(x, y, game) {
+  constructor(x, y) {
     this.mesh = this.createMesh();
     this.mesh.position.set(x, y, 0);
-    this.position = this.mesh.position; // Alias for easier access in AI logic
     this.velocity = new THREE.Vector2(0, 0);
-    this.maxSpeed = POLICE_SPEED;
-    this.health = 240;
-    this.maxHealth = 240;
+    this.maxSpeed = 15;
+    this.health = 30;
+    this.maxHealth = 30;
+    this.state = 'HUNT';
+    this.target = null;
     this.faction = 'police';
-    this.game = game;
-    this.id = Math.floor(Math.random() * 1000); // Unique ID for debugging
-    this.state = 'PATROL';
-    this.patrolIndex = 0; // Current station index
-    this.holdTimer = 0;
     this.lastShotTime = 0;
-    this.fireRate = 400;
-    this.patrolTarget = null; // THREE.Vector2 of current waypoint
-    dbg(this, 'spawned');
-  }
-
-  setState(newState) {
-    if (this.state !== newState) {
-      this.state = newState;
-      dbg(this, '→ ' + newState);
-    }
+    this.fireRate = 800;
+    this.attackRange = 60;
+    this.detectionRange = 200;
+    this.optimalRange = 45;
   }
 
   createMesh() {
     const group = new THREE.Group();
-    const hullGeometry = new THREE.ConeGeometry(0.6, 3, 4);
-    const hullMaterial = new THREE.MeshBasicMaterial({ color: 0x3366ff });
+    const hullGeometry = new THREE.ConeGeometry(0.8, 2.5, 3);
+    const hullMaterial = new THREE.MeshBasicMaterial({ color: 0x2222aa });
     const hull = new THREE.Mesh(hullGeometry, hullMaterial);
     hull.rotation.z = Math.PI / 2;
     group.add(hull);
     return group;
   }
 
-  //-------------------------------------------------------------
-  // ─── constants ──────────────────────────────────────────────
-  SENSOR_RADIUS   = 400;
-  FIRE_RADIUS     = 250;
-
-  // ─── new persistent slots ───────────────────────────────────
-
-  // ─── public update() override ───────────────────────────────
-  update(dt, game) {
+  update(deltaTime, game) {
     switch (this.state) {
-
-      case 'PATROL': {
-        const p = this.findNearestPirate(game);
-        if (p) { this.targetShip = p; this.state = 'INTERCEPT';
-                 dbg(this,'→ INTERCEPT tgt:'+p.id); break; }
-        if (game.activeBeacon) {
-          this.beaconPos = game.activeBeacon.position.clone();
-          this.state = 'RESPOND'; dbg(this,'→ RESPOND'); break;
-        }
-        this.patrolMove(dt);                              break;
-      }
-
-      case 'INTERCEPT': {
-        if (!this.targetShip || this.targetShip.destroyed) { this.reset(); break; }
-        const dist = this.seek(this.targetShip.mesh.position, dt);
-        if (dist < this.FIRE_RADIUS) this.fireAt(this.targetShip, game);
-        break;
-      }
-
-      case 'RESPOND': {
-        if (!game.activeBeacon) { this.reset(); break; }
-        const dist = this.seek(this.beaconPos, dt);
-        if (dist < this.SENSOR_RADIUS) {
-          const p = this.findNearestPirate(game);
-          if (p) { this.targetShip = p; this.state='INTERCEPT';
-                   dbg(this,'→ INTERCEPT tgt:'+p.id); }
-          else if (dist < 50) this.reset();
-        }
-        break;
-      }
+      case 'HUNT': this.huntTarget(deltaTime, game); break;
+      case 'ATTACK': this.attackTarget(deltaTime, game); break;
+      case 'FLEE': this.fleeFromDanger(deltaTime, game); break;
     }
-  }
-
-  // ─── helpers ────────────────────────────────────────────────
-  findNearestPirate(game) {
-    let best=null, bestSq=this.SENSOR_RADIUS*this.SENSOR_RADIUS;
-    for (const p of game.entities.pirates)
-      if (!p.destroyed) {
-        const dSq = this.mesh.position.distanceToSquared(p.mesh.position);
-        if (dSq < bestSq) { best=p; bestSq=dSq; }
-      }
-    return best;
-  }
-
-  reset() { this.state='PATROL'; this.targetShip=null; this.beaconPos=null;
-            dbg(this,'→ PATROL'); }
-
-  seek(targetPos, dt) {
-    const dir = targetPos.clone().sub(this.mesh.position);
-    const dist = dir.length();
-    if (dist>1) {
-      dir.setLength(this.maxSpeed);
-      this.velocity.lerp(dir,0.1);
+    this.velocity.multiplyScalar(0.8);
+    if (this.velocity.length() > this.maxSpeed) {
+      this.velocity.normalize().multiplyScalar(this.maxSpeed);
     }
-    this.mesh.position.addScaledVector(this.velocity, dt);
-    return dist;
+    this.mesh.position.x += this.velocity.x * deltaTime;
+    this.mesh.position.y += this.velocity.y * deltaTime;
   }
 
-  fireAt(enemy, game) {
-    const now = Date.now();
-    if (now - this.lastShotTime < this.fireRate) return;
-    this.lastShotTime = now;
-
-    for (let i = 0; i < POLICE_BURST_SIZE; i++) {
-      // Slight angle offset so missiles don’t overlap perfectly
-      const fireAngle = Math.atan2(
-        enemy.mesh.position.y - this.position.y,
-        enemy.mesh.position.x - this.position.x
-      ) + (i - 1) * 0.05;
-      const missile = new EnhancedProjectile(
-        this.position.x,
-        this.position.y,
-        fireAngle,
-        false,
-        WEAPON_TYPES.MISSILE,
-        true
-      );
-      game.entities.projectiles.push(missile);
-      game.scene.add(missile.mesh);
-    }
-  }
-
-  patrolMove(dt) {
-    if (this.mesh.position.length() > 1200) { // outside map
-      this.patrolTarget = new THREE.Vector2(0, 0);
-    }
-    // lazily pick the first target
-    if (!this.patrolTarget) this.pickNextPatrolTarget();
-
-    // seek current target
-    const dist = this.seek(this.patrolTarget, dt);
-
-    // arrived → choose next station
-    if (dist < 40) this.pickNextPatrolTarget();
-
-    // mild damping
-    this.velocity.multiplyScalar(0.95);
-  }
-
-  pickNextPatrolTarget() {
-    const stations = this.game.entities?.stations ?? [];
-    if (stations.length === 0) {
-      // fallback: map centre
-      this.patrolTarget = new THREE.Vector2(0, 0);
+  huntTarget(deltaTime, game) {
+    this.target = this.findClosestTarget(game);
+    if (!this.target) {
+      this.patrol(deltaTime);
       return;
     }
-    this.patrolIndex = (this.patrolIndex + 1) % stations.length;
-    const s = stations[this.patrolIndex];
-    const dir = new THREE.Vector2().subVectors(s.mesh.position, {x:0,y:0})
-                                   .setLength(300);  // 300-px ring
-    this.patrolTarget = s.mesh.position.clone().add(dir);
+    const distance = this.mesh.position.distanceTo(this.target.position);
+    if (distance > this.detectionRange * 2) {
+      this.target = null;
+      return;
+    }
+    if (distance < this.attackRange) {
+      this.state = 'ATTACK';
+      return;
+    }
+    this.moveToward(this.target.position, deltaTime);
+  }
+
+  attackTarget(deltaTime, game) {
+    if (!this.target) {
+      this.state = 'HUNT';
+      return;
+    }
+    const distance = this.mesh.position.distanceTo(this.target.position);
+    if (distance > this.attackRange * 1.5) {
+      this.state = 'HUNT';
+      return;
+    }
+    if (this.health < this.maxHealth * 0.4 || this.policeNearby(game)) {
+      this.state = 'FLEE';
+      return;
+    }
+    if (distance < this.optimalRange) {
+      this.moveAwayFrom(this.target.position, deltaTime);
+    } else if (distance > this.optimalRange * 1.3) {
+      this.moveToward(this.target.position, deltaTime);
+    } else {
+      this.circleTarget(this.target.position, deltaTime);
+    }
+    this.fireAtTarget(game);
+  }
+
+  fleeFromDanger(deltaTime, game) {
+    const threats = this.findThreats(game);
+    if (threats.length === 0) {
+      this.state = 'HUNT';
+      return;
+    }
+    this.moveAwayFrom(threats[0].position, deltaTime, 1.5);
+    if (this.health > this.maxHealth * 0.7 && !this.policeNearby(game)) {
+      this.state = 'HUNT';
+    }
+  }
+
+  findClosestTarget(game) {
+    let closest = null;
+    let closestDist = this.detectionRange;
+    game.entities.pirates.forEach((pirate) => {
+      if (!pirate.mesh) return;
+      const dist = this.mesh.position.distanceTo(pirate.mesh.position);
+      if (dist < closestDist) {
+        closest = { position: pirate.mesh.position, type: 'pirate', entity: pirate };
+        closestDist = dist;
+      }
+    });
+    return closest;
+  }
+
+  findThreats(game) {
+    const threats = [];
+    // Police do not consider other police as threats
+    return threats;
+  }
+
+  policeNearby(game) {
+    return false; // Police do not flee from other police
+  }
+
+  patrol(deltaTime) {
+    if (!this.patrolTarget || this.reachedTarget(this.patrolTarget, 30)) {
+      this.patrolTarget = {
+        x: (Math.random() - 0.5) * 2000,
+        y: (Math.random() - 0.5) * 2000,
+      };
+    }
+    this.moveToward(this.patrolTarget, deltaTime, 0.7);
+  }
+
+  moveToward(targetPos, deltaTime, speedMod = 1.0) {
+    const dx = targetPos.x - this.mesh.position.x;
+    const dy = targetPos.y - this.mesh.position.y;
+    const dist = Math.sqrt(dx * dx + dy * dy);
+    if (dist > 1) {
+      const inv = safeDiv(1, dist);
+      this.velocity.x += dx * inv * this.maxSpeed * speedMod * deltaTime * 3;
+      this.velocity.y += dy * inv * this.maxSpeed * speedMod * deltaTime * 3;
+    }
+    this.mesh.rotation.z = Math.atan2(dy, dx) + Math.PI / 2;
+  }
+
+  moveAwayFrom(targetPos, deltaTime, speedMod = 1.0) {
+    const dx = this.mesh.position.x - targetPos.x;
+    const dy = this.mesh.position.y - targetPos.y;
+    const dist = Math.sqrt(dx * dx + dy * dy);
+    if (dist > 1) {
+      const inv = safeDiv(1, dist);
+      this.velocity.x += dx * inv * this.maxSpeed * speedMod * deltaTime * 3;
+      this.velocity.y += dy * inv * this.maxSpeed * speedMod * deltaTime * 3;
+      this.mesh.rotation.z = Math.atan2(dy, dx) + Math.PI / 2;
+    }
+  }
+
+  circleTarget(targetPos, deltaTime) {
+    const dx = targetPos.x - this.mesh.position.x;
+    const dy = targetPos.y - this.mesh.position.y;
+    const dist = Math.sqrt(dx * dx + dy * dy);
+    if (dist > 1) {
+      const inv = safeDiv(1, dist);
+      const perpX = -dy * inv;
+      const perpY = dx * inv;
+      this.velocity.x += perpX * this.maxSpeed * deltaTime * 2;
+      this.velocity.y += perpY * this.maxSpeed * deltaTime * 2;
+      this.mesh.rotation.z = Math.atan2(dy, dx) + Math.PI / 2;
+    }
+  }
+
+  fireAtTarget(game) {
+    const currentTime = Date.now();
+    if (currentTime - this.lastShotTime < this.fireRate) return;
+    const dx = this.target.position.x - this.mesh.position.x;
+    const dy = this.target.position.y - this.mesh.position.y;
+    const angle = Math.atan2(dy, dx);
+    const projectile = new Projectile(this.mesh.position.x, this.mesh.position.y, angle, false);
+    projectile.damage = 15;
+    game.entities.projectiles.push(projectile);
+    game.scene.add(projectile.mesh);
+    this.lastShotTime = currentTime;
+  }
+
+  reachedTarget(target, threshold) {
+    const dx = target.x - this.mesh.position.x;
+    const dy = target.y - this.mesh.position.y;
+    return Math.sqrt(dx * dx + dy * dy) < threshold;
   }
 
   takeDamage(amount) {
