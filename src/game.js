@@ -16,6 +16,7 @@ import { TradingShip } from './entities/ships/TradingShip.js';
 import { SimplePirate } from './entities/ships/SimplePirate.js';
 import { SimplePolice } from './entities/ships/SimplePolice.js';
 import { SimpleFriendlyShip } from './entities/ships/SimpleFriendlyShip.js';
+import { PirateHunter } from './entities/ships/PirateHunter.js';
 // PlayerShip is imported from 'ship'
 // REMOVED: Complex COMMODITIES_LIST - using simple materials/goods system
 // REMOVED: MiningLaser - conflicts with AI mining system
@@ -380,15 +381,24 @@ export class SpaceCargoGame {
             this.spawnAsteroids(12); // More asteroids for larger space
             this.spawnDerelicts(3); // Add derelict ships to discover
             
-            // Add pirate station in Alpha Sector (low threat)
-const pirateStation1 = new PirateStation(new THREE.Vector3(-700, -300, 0));
-            this.entities.pirateStations.push(pirateStation1);
-            this.scene.add(pirateStation1.mesh);
+            // Add pirate station in Alpha Sector (low threat) - disabled for debugging
+            if (!window.DEBUG_NO_PIRATE_STATION) {
+                const pirateStation1 = new PirateStation(new THREE.Vector3(-700, -300, 0));
+                this.entities.pirateStations.push(pirateStation1);
+                this.scene.add(pirateStation1.mesh);
+            }
             
             // Add police station in Alpha Sector
 const hq = new PoliceStation(new THREE.Vector3(0, -50, 0));
             this.entities.stations.push(hq);
             this.scene.add(hq.mesh);
+            
+            // Spawn 5 PirateHunters at game start
+            for (let i = 0; i < 5; i++) {
+                const h = new PirateHunter(0, 0, this);
+                this.entities.police.push(h);
+                this.scene.add(h.mesh);
+            }
             
             // Jump gate positioned at zone edge
 const gateToOuterWilds = new JumpGate(800, 0, 'outer-wilds', this.zones['outer-wilds'].name);
@@ -515,13 +525,15 @@ const gateToOuterWilds = new JumpGate(800, 0, 'outer-wilds', this.zones['outer-w
             this.spawnAsteroids(25); // Rich in resources
             this.spawnDerelicts(5); // More derelicts in dangerous space
             
-            // Add multiple pirate stations in Outer Wilds (high threat)
-const pirateStation2 = new PirateStation(new THREE.Vector3(400, -500, 0));
-const pirateStation3 = new PirateStation(new THREE.Vector3(-300, 600, 0));
-            this.entities.pirateStations.push(pirateStation2);
-            this.entities.pirateStations.push(pirateStation3);
-            this.scene.add(pirateStation2.mesh);
-            this.scene.add(pirateStation3.mesh);
+            // Add multiple pirate stations in Outer Wilds (high threat) - disabled for debugging
+            if (!window.DEBUG_NO_PIRATE_STATION) {
+                const pirateStation2 = new PirateStation(new THREE.Vector3(400, -500, 0));
+                const pirateStation3 = new PirateStation(new THREE.Vector3(-300, 600, 0));
+                this.entities.pirateStations.push(pirateStation2);
+                this.entities.pirateStations.push(pirateStation3);
+                this.scene.add(pirateStation2.mesh);
+                this.scene.add(pirateStation3.mesh);
+            }
             
             // Jump gate back to alpha sector
 const gateToAlphaSector = new JumpGate(-800, 0, 'alpha-sector', this.zones['alpha-sector'].name);
@@ -1313,6 +1325,14 @@ const gateToAlphaSector = new JumpGate(-800, 0, 'alpha-sector', this.zones['alph
     const pirate = new SimplePirate(x, y);
     this.entities.pirates.push(pirate);
     this.scene.add(pirate.mesh);
+  }
+
+  // Helper to spawn a police ship at a given position
+  spawnPoliceAt(x, y) {
+    const p = new SimplePolice(x, y, this);
+    this.entities.police.push(p);
+    this.scene.add(p.mesh);
+    return p;
   }
 
   // Ensure playerShip is passed to minimap if it's created after minimap instance
