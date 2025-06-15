@@ -393,8 +393,8 @@ const hq = new PoliceStation(new THREE.Vector3(0, -50, 0));
             this.entities.stations.push(hq);
             this.scene.add(hq.mesh);
             
-            // Spawn 5 PirateHunters at game start
-            for (let i = 0; i < 5; i++) {
+            // Spawn 10 PirateHunters at game start
+            for (let i = 0; i < 10; i++) {
                 const h = new PirateHunter(0, 0, this);
                 this.entities.police.push(h);
                 this.scene.add(h.mesh);
@@ -571,30 +571,10 @@ const gateToAlphaSector = new JumpGate(-800, 0, 'alpha-sector', this.zones['alph
   }
 
   spawnPolice(zoneId, factionControl) {
-    // MVP police spawning - simple individual units
-    const policeCount = zoneId === 'alpha-sector' ? 4 : 2; // Number of police ships
-    
-    for (let i = 0; i < policeCount; i++) {
-      // Spawn police near a random station
-      let spawnX, spawnY;
-      if (this.entities.stations.length > 0) {
-        const randomStation = this.entities.stations[Math.floor(Math.random() * this.entities.stations.length)];
-        spawnX = randomStation.mesh.position.x + (Math.random() - 0.5) * 40;
-        spawnY = randomStation.mesh.position.y + (Math.random() - 0.5) * 40;
-      } else {
-        spawnX = (Math.random() - 0.5) * 200;
-        spawnY = (Math.random() - 0.5) * 200;
-      }
-      
-      // Create simple police
-      const police = new SimplePolice(spawnX, spawnY, this.entities.stations, factionControl);
-      
-      this.entities.police.push(police);
-      this.scene.add(police.mesh);
-      
-      if (this.ui) {
-        this.ui.showMessage(`Police patrol deployed in ${zoneId}`, 'system-neutral');
-      }
+    // No police spawning at start as per user request
+    // This function is kept for potential future use or if called elsewhere
+    if (this.ui) {
+      this.ui.showMessage(`No police patrols deployed in ${zoneId} at start`, 'system-neutral');
     }
   }
 
