@@ -34,9 +34,9 @@ export class SimplePolice {
     this.state = 'PATROL';
     this.patrolIndex = 0; // Current station index
     this.holdTimer = 0;
-    this.targetPirate = null;
     this.lastShotTime = 0;
     this.fireRate = 400;
+    this.patrolTarget = null; // THREE.Vector2 of current waypoint
     dbg(this, 'spawned');
   }
 
@@ -63,9 +63,6 @@ export class SimplePolice {
   FIRE_RADIUS     = 250;
 
   // ─── new persistent slots ───────────────────────────────────
-  state      = 'PATROL';   // PATROL | INTERCEPT | RESPOND
-  targetShip = null;       // pirate Entity
-  beaconPos  = null;       // THREE.Vector2
 
   // ─── public update() override ───────────────────────────────
   update(dt, game) {
@@ -153,11 +150,29 @@ export class SimplePolice {
   }
 
   patrolMove(dt) {
-    if (this.velocity.lengthSq() < 1) {
-      const a = Math.random() * Math.PI * 2;
-      this.velocity.set(Math.cos(a) * 20, Math.sin(a) * 20);
+    // lazily pick the first target
+    if (!this.patrolTarget) this.pickNextPatrolTarget();
+
+    // seek current target
+    const dist = this.seek(this.patrolTarget, dt);
+
+    // arrived → choose next station
+    if (dist < 50) this.pickNextPatrolTarget();
+
+    // mild damping
+    this.velocity.multiplyScalar(0.9);
+  }
+
+  pickNextPatrolTarget() {
+    const stations = this.game.entities.stations;
+    if (!stations || stations.length === 0) {
+      // fallback: map centre
+      this.patrolTarget = new THREE.Vector2(0, 0);
+      return;
     }
-    this.mesh.position.addScaledVector(this.velocity, dt);
+    this.patrolIndex = (this.patrolIndex + 1) % stations.length;
+    const s = stations[this.patrolIndex];
+    this.patrolTarget = new THREE.Vector2(s.mesh.position.x, s.mesh.position.y);
   }
 
   takeDamage(amount) {
