@@ -1,7 +1,5 @@
 import * as THREE from 'three';
 import {
-  POLICE_DEFENCE_RADIUS,
-  POLICE_PATROL_HOLD,
   POLICE_SPEED,
   POLICE_FIRE_RANGE,
   POLICE_BURST_SIZE
@@ -13,7 +11,7 @@ const POLICE_DEBUG = true; // flip to false to silence logs
 function dbg(ship, msg = '') {
   if (!POLICE_DEBUG) return;
   const v = ship.velocity.length().toFixed(1);
-  const text = `[P${ship.id}] state:${ship.state} vel:${v} tgt:${ship.targetPirate ? ship.targetPirate.id : 'none'} ${msg}`;
+  const text = `[P${ship.id}] state:${ship.state} vel:${v} tgt:${ship.targetShip ? ship.targetShip.id : 'none'} ${msg}`;
   console.log(text);
   // Route to Ctrl+L overlay if event logger is available
   if (ship.game && ship.game.eventLogger && ship.game.eventLogger.logPolice) {
@@ -28,12 +26,12 @@ export class SimplePolice {
     this.position = this.mesh.position; // Alias for easier access in AI logic
     this.velocity = new THREE.Vector2(0, 0);
     this.maxSpeed = POLICE_SPEED;
-    this.health = 60;
-    this.maxHealth = 60;
+    this.health = 240;
+    this.maxHealth = 240;
     this.faction = 'police';
     this.game = game;
     this.id = Math.floor(Math.random() * 1000); // Unique ID for debugging
-    this.state = 'PATROLLING';
+    this.state = 'PATROL';
     this.patrolIndex = 0; // Current station index
     this.holdTimer = 0;
     this.targetPirate = null;
@@ -62,7 +60,7 @@ export class SimplePolice {
   //-------------------------------------------------------------
   // ─── constants ──────────────────────────────────────────────
   SENSOR_RADIUS   = 400;
-  FIRE_RADIUS     = 120;
+  FIRE_RADIUS     = 250;
 
   // ─── new persistent slots ───────────────────────────────────
   state      = 'PATROL';   // PATROL | INTERCEPT | RESPOND
@@ -87,14 +85,14 @@ export class SimplePolice {
       case 'INTERCEPT': {
         if (!this.targetShip || this.targetShip.destroyed) { this.reset(); break; }
         const dist = this.seek(this.targetShip.mesh.position, dt);
-        if (dist < FIRE_RADIUS) this.fireAt(this.targetShip, game);
+        if (dist < this.FIRE_RADIUS) this.fireAt(this.targetShip, game);
         break;
       }
 
       case 'RESPOND': {
         if (!game.activeBeacon) { this.reset(); break; }
         const dist = this.seek(this.beaconPos, dt);
-        if (dist < SENSOR_RADIUS) {
+        if (dist < this.SENSOR_RADIUS) {
           const p = this.findNearestPirate(game);
           if (p) { this.targetShip = p; this.state='INTERCEPT';
                    dbg(this,'→ INTERCEPT tgt:'+p.id); }
@@ -107,7 +105,7 @@ export class SimplePolice {
 
   // ─── helpers ────────────────────────────────────────────────
   findNearestPirate(game) {
-    let best=null, bestSq=SENSOR_RADIUS*SENSOR_RADIUS;
+    let best=null, bestSq=this.SENSOR_RADIUS*this.SENSOR_RADIUS;
     for (const p of game.entities.pirates)
       if (!p.destroyed) {
         const dSq = this.mesh.position.distanceToSquared(p.mesh.position);
@@ -152,6 +150,14 @@ export class SimplePolice {
       game.entities.projectiles.push(missile);
       game.scene.add(missile.mesh);
     }
+  }
+
+  patrolMove(dt) {
+    if (this.velocity.lengthSq() < 1) {
+      const a = Math.random() * Math.PI * 2;
+      this.velocity.set(Math.cos(a) * 20, Math.sin(a) * 20);
+    }
+    this.mesh.position.addScaledVector(this.velocity, dt);
   }
 
   takeDamage(amount) {

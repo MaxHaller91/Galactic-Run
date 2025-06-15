@@ -73,11 +73,11 @@ export class TradingShip {
   }
 
   forceReset() {
-    console.log(`🔄 Trader force reset - was in ${this.state} with cargo: M:${this.cargo.materials} F:${this.cargo.food}`);
+    console.log(`🔄 Trader force reset - was in ${this.state} with cargo: M:${this.cargo.M} F:${this.cargo.F}`);
     this.resetToSeeking();
     // Ensure cargo object structure is preserved
     if (!this.cargo || typeof this.cargo !== 'object') {
-      this.cargo = { materials: 0, food: 0 };
+      this.cargo = { M: 0, F: 0 };
     }
   }
 
@@ -86,7 +86,7 @@ export class TradingShip {
     this.stateTimer = 0;
     // Ensure cargo object structure is preserved
     if (!this.cargo || typeof this.cargo !== 'object') {
-      this.cargo = { materials: 0, food: 0 };
+      this.cargo = { M: 0, F: 0 };
     }
   }
 
@@ -105,25 +105,27 @@ export class TradingShip {
     }
 
     // Find best order to fulfill
-    const viableOrders = game.availableOrders.filter((order) => !order.takenBy && !order.completed && this.canHandleOrder(order));
+    let viableOrders = game.availableOrders.filter((order) => !order.takenBy && !order.completed && this.canHandleOrder(order));
 
     if (viableOrders.length === 0) {
       this.moveToOtherStation();
       return;
     }
 
-    // Prioritize orders based on commodity type
-    const COMMODITY_PRIORITY = { materials: 0, food: 1, funding: 2 };
-
-    // Sort orders by priority, then by distance if priorities are equal
-    viableOrders.sort((a, b) => {
-      const pa = COMMODITY_PRIORITY[a.resourceType] ?? 99;
-      const pb = COMMODITY_PRIORITY[b.resourceType] ?? 99;
-      if (pa !== pb) return pa - pb; // Higher priority first (lower number)
-      const distA = this.mesh.position.distanceTo(a.station.mesh.position);
-      const distB = this.mesh.position.distanceTo(b.station.mesh.position);
-      return distA - distB; // Fallback to closest distance
-    });
+    // Filter and sort orders by reachability, stock, priority, and distance
+    viableOrders = viableOrders
+      .filter(o => {
+        // Assume reachable if no specific check
+        const reachable = true;
+        const stock = o.type === 'sell' ? o.station.resources[o.resourceType] >= o.quantity : true;
+        return reachable && stock;
+      })
+      .sort((a, b) => {
+        const prio = { materials: 0, food: 1, funding: 2 };
+        const pa = prio[a.resourceType] ?? 99;
+        const pb = prio[b.resourceType] ?? 99;
+        return pa !== pb ? pa - pb : this.mesh.position.distanceTo(a.station.mesh.position) - this.mesh.position.distanceTo(b.station.mesh.position);
+      });
 
     // Pick the first order after sorting (highest priority and closest)
     let bestOrder = viableOrders.length > 0 ? viableOrders[0] : null;
@@ -157,14 +159,14 @@ export class TradingShip {
         return true; // We can fulfill immediately
       }
       // If we don't have it, check if we have space to source it
-      return (this.cargo.materials + this.cargo.food + order.quantity) <= this.maxCargo;
+      return (this.cargo.M + this.cargo.F + order.quantity) <= this.maxCargo;
     } else if (order.type === ORDER_TYPE.FUND_POLICE) {
       // For fund police orders, we can always handle them as it's virtual credits
       return true;
     }
     // For sell orders, we need credits and cargo space
     return this.credits >= order.totalValue
-             && (this.cargo.materials + this.cargo.food + order.quantity) <= this.maxCargo;
+             && (this.cargo.M + this.cargo.F + order.quantity) <= this.maxCargo;
   }
 
   takeOrder(order) {
@@ -254,7 +256,8 @@ export class TradingShip {
     if (order.type === ORDER_TYPE.SELL) {
       // Handling pickup for SELL orders (traditional approach)
       if (order.station.sellResourceToTrader(order.resourceType, order.quantity)) {
-        this.cargo[order.resourceType] += order.quantity;
+        const resourceKey = order.resourceType === 'materials' ? 'M' : 'F';
+        this.cargo[resourceKey] += order.quantity;
         console.log(`📦 Trader picked up ${order.quantity} ${order.resourceType} from ${order.stationName}`);
 
         // Now find a station that wants this resource
@@ -267,7 +270,8 @@ export class TradingShip {
     } else if (order.type === ORDER_TYPE.BUY) {
       // Handling pickup for BUY orders (sourcing goods to fulfill contract)
       if (this.target.sellResourceToTrader(order.resourceType, order.quantity)) {
-        this.cargo[order.resourceType] += order.quantity;
+        const resourceKey = order.resourceType === 'materials' ? 'M' : 'F';
+        this.cargo[resourceKey] += order.quantity;
         console.log(`📦 Trader sourced ${order.quantity} ${order.resourceType} from ${this.target.name || 'Station'} for delivery to ${order.stationName}`);
 
         // Now go deliver to the original BUY order station
@@ -362,8 +366,9 @@ export class TradingShip {
 
     if (order.type === ORDER_TYPE.BUY) {
       // Delivering to a buy order
-      if (this.cargo[order.resourceType] >= order.quantity && order.station.credits >= order.totalValue) {
-        this.cargo[order.resourceType] -= order.quantity;
+      const resourceKey = order.resourceType === 'materials' ? 'M' : 'F';
+      if (this.cargo[resourceKey] >= order.quantity && order.station.credits >= order.totalValue) {
+        this.cargo[resourceKey] -= order.quantity;
         order.station.buyResourceFromTrader(order.resourceType, order.quantity);
         this.credits += order.totalValue;
         order.station.credits -= order.totalValue;
@@ -378,7 +383,7 @@ export class TradingShip {
       // Delivering credits to a police station
       if (this.cargo.credits >= order.amount) {
         order.toStation.receiveCredits(order.amount);
-        this.cargo = {}; // Wipe virtual cargo
+        this.cargo = { M: 0, F: 0 }; // Wipe virtual cargo but maintain structure
         console.log(`💰 Trader delivered $${order.amount} to ${order.toStation.name || 'Police Station'} for funding`);
         this.target = this.originStation;
         this.setState('RETURNING_TO_ORIGIN');
@@ -390,8 +395,9 @@ export class TradingShip {
     } else {
       // Delivering after pickup (selling to a buyer)
       const { deliveryOrder } = this;
-      if (deliveryOrder && this.cargo[deliveryOrder.resourceType] >= deliveryOrder.quantity) {
-        this.cargo[deliveryOrder.resourceType] -= deliveryOrder.quantity;
+      if (deliveryOrder && this.cargo[deliveryOrder.resourceType === 'materials' ? 'M' : 'F'] >= deliveryOrder.quantity) {
+        const resourceKey = deliveryOrder.resourceType === 'materials' ? 'M' : 'F';
+        this.cargo[resourceKey] -= deliveryOrder.quantity;
         deliveryOrder.station.buyResourceFromTrader(deliveryOrder.resourceType, deliveryOrder.quantity);
         this.credits += deliveryOrder.totalValue;
         deliveryOrder.station.credits -= deliveryOrder.totalValue;
@@ -450,6 +456,6 @@ export class TradingShip {
   }
 
   getCargoString() {
-    return `M:${this.cargo.materials} F:${this.cargo.food}`;
+    return `M:${this.cargo.M} F:${this.cargo.F}`;
   }
 }

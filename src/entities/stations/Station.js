@@ -161,8 +161,9 @@ export class Station {
       this.resources[resourceType] -= quantity;
       // Check if any associated sell orders need to be closed due to depleted stock
       this.myOrders.forEach(order => {
-        if (order.type === 'sell' && order.resourceType === resourceType && !order.completed && order.takenBy) {
-          if (this.resources[resourceType] < order.quantity) {
+        if (order.type === 'sell' && order.resourceType === resourceType && !order.completed) {
+          if (this.resources[resourceType] <= 0 || this.resources[resourceType] < order.quantity) {
+            order.status = 'closed';
             order.completed = true;
             order.takenBy = null;
             console.log(`📋 ${this.name || 'Station'} closed SELL order for ${order.quantity} ${resourceType} due to insufficient stock`);
