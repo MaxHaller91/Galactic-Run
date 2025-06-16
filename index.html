@@ -9,6 +9,14 @@
   </style>
 </head>
 <body>
-  <script type="module" src="/src/main.js"></script>
+  <script type="module">
+    import * as THREE from 'https://cdn.skypack.dev/three';
+    import * as YUKA from 'https://cdn.skypack.dev/yuka';
+
+    window.THREE = THREE;
+    window.YUKA = YUKA;
+
+    import './src/main.js';
+  </script>
 </body>
 </html>
