@@ -9,12 +9,46 @@
     "sourceType": "module"
   },
   "rules": {
+    "no-unused-vars": ["error", { "args": "none", "varsIgnorePattern": "^_" }],
+    "default-case": "error",
+    "no-param-reassign": "error",
+    "no-shadow": "error",
+    "no-loop-func": "error",
+    "no-nested-ternary": "error",
+    "radix": ["error", "as-needed"],
+    "linebreak-style": "off",
+    "arrow-parens": "off",
+    "max-len": "off",
+    "no-plusplus": "off",
+    "no-trailing-spaces": "off",
+    "no-lonely-if": "off",
+    "prefer-destructuring": "off",
+    "no-mixed-operators": "off",
+    "no-continue": "off",
+    "import/no-extraneous-dependencies": "off",
     "no-console": "off",
     "import/extensions": ["error", "always"],
     "import/no-unresolved": "off",
     "import/prefer-default-export": "off",
     "class-methods-use-this": "off",
-    "max-len": ["warn", { "code": 120 }],
-    "no-underscore-dangle": "off"
-  }
+    "no-underscore-dangle": "off",
+    "no-var": "off",
+    "vars-on-top": "off",
+    "prefer-arrow-callback": "off",
+    "space-before-function-paren": "off",
+    "func-names": "off",
+    "comma-dangle": "off",
+    "no-extra-bind": "off",
+    "block-scoped-var": "off",
+    "no-redeclare": "off",
+    "import/no-duplicates": "off"
+  },
+  "overrides": [
+    {
+      "files": ["src/game.js"],
+      "rules": {
+        "max-len": "off"
+      }
+    }
+  ]
 }

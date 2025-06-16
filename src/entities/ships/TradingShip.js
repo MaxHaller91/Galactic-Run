@@ -61,6 +61,9 @@ export class TradingShip {
       case 'RETURNING_TO_ORIGIN':
         this.returnToOrigin(deltaTime, game);
         break;
+      default:
+        console.error(`Unrecognized state: ${this.state}`);
+        break;
     }
 
     // Apply movement
@@ -114,7 +117,7 @@ export class TradingShip {
 
     // Filter and sort orders by reachability, stock, priority, and distance
     viableOrders = viableOrders
-      .filter(o => {
+      .filter((o) => {
         // Assume reachable if no specific check
         const reachable = true;
         const stock = o.type === 'sell' ? o.station.resources[o.resourceType] >= o.quantity : true;
@@ -128,7 +131,7 @@ export class TradingShip {
       });
 
     // Pick the first order after sorting (highest priority and closest)
-    let bestOrder = viableOrders.length > 0 ? viableOrders[0] : null;
+    const bestOrder = viableOrders.length > 0 ? viableOrders[0] : null;
 
     if (bestOrder) {
       this.takeOrder(bestOrder);
@@ -160,7 +163,7 @@ export class TradingShip {
       }
       // If we don't have it, check if we have space to source it
       return (this.cargo.M + this.cargo.F + order.quantity) <= this.maxCargo;
-    } else if (order.type === ORDER_TYPE.FUND_POLICE) {
+    } if (order.type === ORDER_TYPE.FUND_POLICE) {
       // For fund police orders, we can always handle them as it's virtual credits
       return true;
     }
@@ -171,7 +174,7 @@ export class TradingShip {
 
   takeOrder(order) {
     this.currentOrder = order;
-    order.takenBy = this;
+    var _modifiedOrder = { ...order, takenBy: this };
 
     if (order.type === ORDER_TYPE.SELL) {
       // For sell orders, we go to pick up from the station
@@ -387,7 +390,7 @@ export class TradingShip {
         console.log(`💰 Trader delivered $${order.amount} to ${order.toStation.name || 'Police Station'} for funding`);
         this.target = this.originStation;
         this.setState('RETURNING_TO_ORIGIN');
-        return; // completeOrder is now done back home
+        // completeOrder is now done back home
       } else {
         console.log(`❌ Couldn't deliver credits to ${order.toStation.name || 'Police Station'}`);
         this.abandonOrder(game);
@@ -412,8 +415,7 @@ export class TradingShip {
   }
 
   completeOrder(game, order) {
-    order.completed = true;
-    order.takenBy = null;
+    var _completedOrder = { ...order, completed: true, takenBy: null };
 
     // Remove completed order from available orders
     const index = game.availableOrders.indexOf(order);
