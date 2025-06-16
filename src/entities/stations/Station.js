@@ -91,7 +91,7 @@ export class Station {
     }
     // Create FUND_POLICE orders if not a police station and credits are sufficient
     if (this.type !== 'police' && this.credits >= 8000) {
-      const policeStation = game.entities.stations.find(s => s.type === 'police');
+      const policeStation = game.entities.stations.find((s) => s.type === 'police');
       if (policeStation) {
         const donationAmount = 5000;
         this.credits -= donationAmount; // Immediate deduction as escrow
@@ -160,12 +160,12 @@ export class Station {
     if (this.resources[resourceType] >= quantity) {
       this.resources[resourceType] -= quantity;
       // Check if any associated sell orders need to be closed due to depleted stock
-      this.myOrders.forEach(order => {
+      this.myOrders.forEach((order) => {
         if (order.type === 'sell' && order.resourceType === resourceType && !order.completed) {
           if (this.resources[resourceType] <= 0 || this.resources[resourceType] < order.quantity) {
-            order.status = 'closed';
-            order.completed = true;
-            order.takenBy = null;
+            var _updatedOrder = {
+              ...order, status: 'closed', completed: true, takenBy: null 
+            };
             console.log(`📋 ${this.name || 'Station'} closed SELL order for ${order.quantity} ${resourceType} due to insufficient stock`);
           }
         }

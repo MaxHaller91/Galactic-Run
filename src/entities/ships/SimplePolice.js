@@ -5,6 +5,9 @@ import { safeDiv } from '../../util/Math.js';
 export class SimplePolice {
   constructor(x, y) {
     this.mesh = this.createMesh();
+    if (!this.mesh) {
+      console.warn(`[SPAWN WARNING] Entity SimplePolice has no mesh!`);
+    }
     this.mesh.position.set(x, y, 0);
     this.velocity = new THREE.Vector2(0, 0);
     this.maxSpeed = 15;
@@ -32,9 +35,18 @@ export class SimplePolice {
 
   update(deltaTime, game) {
     switch (this.state) {
-      case 'HUNT': this.huntTarget(deltaTime, game); break;
-      case 'ATTACK': this.attackTarget(deltaTime, game); break;
-      case 'FLEE': this.fleeFromDanger(deltaTime, game); break;
+      case 'HUNT': 
+        this.huntTarget(deltaTime, game); 
+        break;
+      case 'ATTACK': 
+        this.attackTarget(deltaTime, game); 
+        break;
+      case 'FLEE': 
+        this.fleeFromDanger(deltaTime, game); 
+        break;
+      default:
+        console.error(`Unrecognized state: ${this.state}`);
+        break;
     }
     this.velocity.multiplyScalar(0.8);
     if (this.velocity.length() > this.maxSpeed) {

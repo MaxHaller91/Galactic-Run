@@ -202,6 +202,15 @@ export class SpaceCargoGame {
     this.renderer.setClearColor(zoneConfig.bgColor || 0x000011);
     // Potentially add zone-specific lighting, fog, etc. here later
 
+    // Add a visible test mesh at origin to validate rendering
+    const debugBox = new THREE.Mesh(
+      new THREE.BoxGeometry(100, 100, 100),
+      new THREE.MeshBasicMaterial({ color: 0x00ff00 })
+    );
+    debugBox.position.set(0, 0, 0);
+    this.scene.add(debugBox);
+    console.log("[DEBUG] Test cube added at origin (0,0,0)");
+
     // Re-create or update starfield based on zone if desired
     // For now, let's keep a generic starfield but clear old one if any
     if (this.stars) this.scene.remove(this.stars);
@@ -228,8 +237,10 @@ export class SpaceCargoGame {
     this.stars = new THREE.Points(starsGeometry, starsMaterial);
     this.scene.add(this.stars);
 
-    // Camera setup (remains largely the same unless zones have different scales)
-    this.camera.position.z = 10;
+    // Camera setup to ensure it views the origin
+    this.camera.position.set(0, 0, 100);
+    this.camera.lookAt(0, 0, 0);
+    console.log("[DEBUG] Camera positioned at (0,0,100) looking at origin (0,0,0)");
   }
 
   clearZoneEntities() {
@@ -533,6 +544,8 @@ export class SpaceCargoGame {
       if (this.eventLogger) {
         this.eventLogger.logPlayer(`Entered zone: ${zoneConfig.name}`, { zoneId });
       }
+      // Log scene population for diagnostic purposes
+      console.log("[DEBUG] Scene population after zone load:", this.scene.children.length, "objects in scene");
     }.bind(this), 250); // Match flash duration
   }
 

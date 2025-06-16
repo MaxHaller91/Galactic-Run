@@ -5,6 +5,9 @@ import { safeDiv } from '../../util/Math.js';
 export class SimplePirate {
   constructor(x, y) {
     this.mesh = this.createMesh();
+    if (!this.mesh) {
+      console.warn(`[SPAWN WARNING] Entity SimplePirate has no mesh!`);
+    }
     this.mesh.position.set(x, y, 0);
     this.velocity = new THREE.Vector2(0, 0);
     this.maxSpeed = 15;
@@ -31,56 +34,59 @@ export class SimplePirate {
 
   update(deltaTime, game) {
     switch (this.state) {
-      case 'HUNT': this.huntTarget(deltaTime, game); break;
-      case 'ATTACK': this.attackTarget(deltaTime, game); break;
-      case 'FLEE': this.fleeFromDanger(deltaTime, game); break;
-    }
-    this.velocity.multiplyScalar(0.8);
-    if (this.velocity.length() > this.maxSpeed) {
-      this.velocity.normalize().multiplyScalar(this.maxSpeed);
-    }
-    this.mesh.position.x += this.velocity.x * deltaTime;
-    this.mesh.position.y += this.velocity.y * deltaTime;
-  }
+      case 'IDLE':
+        // Look for a target
+        if (this.targetStation) {
+          this.state = 'MOVING_TO_TARGET';
+          this.targetPosition = this.targetStation.mesh.position.clone();
+        } else {
+          // Find a new target
+          this.findTargetStation(game);
+          if (this.targetStation) {
+            this.state = 'MOVING_TO_TARGET';
+            this.targetPosition = this.targetStation.mesh.position.clone();
+          }
+        }
+        break;
+      case 'MOVING_TO_TARGET':
+        // Move towards the target position
+        var direction = this.targetPosition.clone().sub(this.mesh.position).normalize();
+        this.velocity.copy(direction.multiplyScalar(this.maxSpeed));
+        this.mesh.rotation.z = Math.atan2(direction.y, direction.x) - Math.PI / 2;
 
-  huntTarget(deltaTime, game) {
-    this.target = this.findClosestTarget(game);
-    if (!this.target) {
-      this.patrol(deltaTime);
-      return;
-    }
-    const distance = this.mesh.position.distanceTo(this.target.position);
-    if (distance > this.detectionRange * 2) {
-      this.target = null;
-      return;
-    }
-    if (distance < this.attackRange) {
-      this.state = 'ATTACK';
-      return;
-    }
-    this.moveToward(this.target.position, deltaTime);
-  }
+        // Check if close enough to attack
+        if (this.mesh.position.distanceTo(this.targetPosition) < 10) {
+          this.state = 'ATTACKING';
+          this.velocity.set(0, 0, 0);
+        }
+        break;
+      case 'ATTACKING':
+        // Attack the target station
+        if (this.targetStation) {
+          this.attackTarget(deltaTime);
+        } else {
+          this.state = 'IDLE';
+        }
+        break;
+      case 'FLEEING':
+        // Move away from the threat
+        if (this.threat) {
+          const fleeDirection = this.mesh.position.clone().sub(this.threat.mesh.position).normalize();
+          this.velocity.copy(fleeDirection.multiplyScalar(this.maxSpeed));
+          this.mesh.rotation.z = Math.atan2(fleeDirection.y, fleeDirection.x) - Math.PI / 2;
 
-  attackTarget(deltaTime, game) {
-    if (!this.target) {
-      this.state = 'HUNT';
-      return;
-    }
-    const distance = this.mesh.position.distanceTo(this.target.position);
-    if (distance > this.attackRange * 1.5) {
-      this.state = 'HUNT';
-      return;
-    }
-    if (this.health < this.maxHealth * 0.4 || this.policeNearby(game)) {
-      this.state = 'FLEE';
-      return;
-    }
-    if (distance < this.optimalRange) {
-      this.moveAwayFrom(this.target.position, deltaTime);
-    } else if (distance > this.optimalRange * 1.3) {
-      this.moveToward(this.target.position, deltaTime);
-    } else {
-      this.circleTarget(this.target.position, deltaTime);
+          // If far enough, return to idle
+          if (this.mesh.position.distanceTo(this.threat.mesh.position) > 200) {
+            this.state = 'IDLE';
+            this.threat = null;
+          }
+        } else {
+          this.state = 'IDLE';
+        }
+        break;
+      default:
+        console.error(`Unrecognized state: ${this.state}`);
+        break;
     }
     this.fireAtTarget(game);
   }

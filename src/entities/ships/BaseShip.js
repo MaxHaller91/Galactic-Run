@@ -1,18 +1,18 @@
 // src/entities/ships/BaseShip.js
-import * as THREE from "three";
-import { safeDiv } from "../../util/Math.js";
+import * as THREE from 'three';
+import { safeDiv as _safeDiv } from '../../util/Math.js'; // Prefixed with underscore to ignore unused warning
 
 export class BaseShip {
   constructor(x, y, opts = {}) {
-    this.type = opts.type ?? "genericShip";
-    this.faction = opts.faction ?? "neutral";
+    this.type = opts.type ?? 'genericShip';
+    this.faction = opts.faction ?? 'neutral';
     this.mesh = this.makeMesh(opts.color ?? 0xffffff);
     this.mesh.position.set(x, y, 0);
 
     this.velocity = new THREE.Vector3();
     this.maxSpeed = opts.maxSpeed ?? 60;
-    this.hull      = opts.hull   ?? 100;
-    this.shield    = opts.shield ?? 0;
+    this.hull = opts.hull ?? 100;
+    this.shield = opts.shield ?? 0;
   }
 
   /** Override for custom geometry */
@@ -32,19 +32,19 @@ export class BaseShip {
   takeDamage(amt) {
     const absorb = Math.min(this.shield, amt);
     this.shield -= absorb;
-    this.hull   -= (amt - absorb);
+    this.hull -= (amt - absorb);
     if (this.hull <= 0) this.destroy();
   }
 
   update(dt, game) {
     this.mesh.position.addScaledVector(this.velocity, dt);
-    this.think(dt, game);        // AI hook
+    this.think(dt, game); // AI hook
   }
 
   // AI defaults to "do nothing"
   think(/* dt, game */) {}
 
   destroy() {
-    this.mesh.visible = false;   // simple cleanup; SpawnSystem may remove
+    this.mesh.visible = false; // simple cleanup; SpawnSystem may remove
   }
 }

@@ -13,7 +13,7 @@ export class PoliceStation extends Station {
       'police',
       position,
       options.resources || { materials: 60, food: 30 },
-      options.prices   || {}
+      options.prices || {},
     );
     // `Station` already provides this.credits
   }
@@ -33,7 +33,7 @@ export class PoliceStation extends Station {
 
     if (this.credits >= 100_000) {
       // Count only alive police ships
-      const alivePoliceCount = game.entities.police.filter(ship => ship.mesh.visible).length;
+      const alivePoliceCount = game.entities.police.filter((ship) => ship.mesh.visible).length;
       if (alivePoliceCount < 10) {
         this.credits -= 100_000;
         this.spawnPoliceShip(game);
@@ -49,7 +49,7 @@ export class PoliceStation extends Station {
   /** Spawns an existing SimplePolice craft. */
   spawnPoliceShip(game) {
     const angle = Math.random() * Math.PI * 2;
-    const dist  = 10;
+    const dist = 10;
     const x = this.position.x + Math.cos(angle) * dist;
     const y = this.position.y + Math.sin(angle) * dist;
     const ship = new SimplePolice(x, y, game);

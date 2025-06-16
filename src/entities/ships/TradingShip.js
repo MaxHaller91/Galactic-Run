@@ -6,6 +6,9 @@ export class TradingShip {
   constructor(position, stations) {
     this.position = position;
     this.mesh = this.createMesh();
+    if (!this.mesh) {
+      console.warn(`[SPAWN WARNING] Entity TradingShip has no mesh!`);
+    }
     this.mesh.position.copy(position);
     this.credits = 1000 + Math.random() * 500;
     this.cargo = { materials: 0, food: 0 };
