@@ -526,7 +526,8 @@ export class SpaceCargoGame {
 
       // After loading zone, update UI to reflect current zone
       if (this.ui) {
-        this.ui.updateZoneInfo(zoneConfig);
+        // Removed call to non-existent updateZoneInfo method
+        // UI updates are handled in the game loop
       }
       // Log zone transition
       if (this.eventLogger) {
