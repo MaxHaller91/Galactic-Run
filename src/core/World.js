@@ -1,0 +1,63 @@
+import * as YUKA from 'yuka';
+
+/**
+ * World class managing game entities and global state.
+ */
+class World {
+  constructor() {
+    this.entityManager = new YUKA.EntityManager();
+    this.dispatcher = new YUKA.MessageDispatcher();
+    this.time = new YUKA.Time();
+
+    // Spatial index disabled for now; current map uses negative coordinates.
+    // Re-enable once we choose a centered grid or shift entity positions.
+    // this.entityManager.spatialIndex = new YUKA.CellSpacePartitioning(
+    //   2000, 2000, 2000, 5, 5, 5
+    // );
+  }
+
+  /**
+   * Updates all entities in the world.
+   * @param {number} deltaTime - Time since last update in seconds.
+   */
+  update(deltaTime) {
+    this.entityManager.update(deltaTime);
+    this.dispatcher.dispatchDelayedMessages();
+  }
+
+  /**
+   * Adds an entity to the world.
+   * @param {Object} entity - The entity to add.
+   */
+  addEntity(entity) {
+    this.entityManager.add(entity);
+  }
+
+  /**
+   * Removes an entity from the world.
+   * @param {Object} entity - The entity to remove.
+   */
+  removeEntity(entity) {
+    this.entityManager.remove(entity);
+  }
+
+  /**
+   * Returns all station entities in the world.
+   * @returns {Array} Array of station entities.
+   */
+  getStations() {
+    return this.entityManager.entities.filter(e => e.constructor.name === 'TradeStation');
+  }
+
+  /**
+   * Returns all ship entities in the world.
+   * @returns {Array} Array of ship entities.
+   */
+  getShips() {
+    return this.entityManager.entities.filter(e => e.constructor.name === 'TradeShip');
+  }
+}
+
+// Singleton instance
+const instance = new World();
+export default instance;

@@ -15,6 +15,7 @@ export function TraderPack(ship) {
   ship.keepInBoundsBehavior = new KeepInBoundsBehavior(1800);
   
   // Attach TradeShip FSM
+  ship.stateMachine.add('IDLE', new TradeShipIdleState());
   ship.stateMachine.add('SEEKING', new SeekingState());
   ship.stateMachine.add('DOCKING', new DockingState());
   ship.stateMachine.changeTo('IDLE');

@@ -1,0 +1,7 @@
+{
+  "id": "station-basic",
+  "class": "TradeStation",
+  "name": "Basic Station",
+  "stats": { "maxSpeed": 0, "mass": 1000 },
+  "components": ["Health:500", "Cargo:5000"]
+}

@@ -1,0 +1,8 @@
+{
+  "id": "pirate-raider",
+  "class": "TradeShip",
+  "name": "Pirate Raider",
+  "stats": { "maxSpeed": 80, "mass": 30 },
+  "components": ["Health:80", "Cargo:80", "Weapon:10:400:1500"],
+  "behaviours": ["Pirate"]
+}

@@ -1,0 +1,8 @@
+{
+  "id": "cargo-runner",
+  "class": "TradeShip",
+  "name": "Cargo Runner",
+  "stats": { "maxSpeed": 60, "mass": 40 },
+  "components": ["Health:100", "Cargo:120", "Weapon:5:300:2000"],
+  "behaviours": ["Trader"]
+}
