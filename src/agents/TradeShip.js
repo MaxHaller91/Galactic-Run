@@ -42,6 +42,21 @@ export class TradeShip extends Vehicle {
     this.seek.target.copy(station.position);
     this.arrive.target.copy(station.position);
   }
+  
+  pickNextStation(stations) {
+    if (stations.length === 0) return null;
+    let closestStation = stations[0];
+    let minDistance = this.position.distanceTo(closestStation.position);
+    
+    for (let i = 1; i < stations.length; i++) {
+      const distance = this.position.distanceTo(stations[i].position);
+      if (distance < minDistance) {
+        minDistance = distance;
+        closestStation = stations[i];
+      }
+    }
+    return closestStation;
+  }
 }
 
 /* ───── States ───────────────────────────────────────────── */
@@ -49,14 +64,21 @@ export class TradeShip extends Vehicle {
 class IdleState extends State {
   enter(owner) {
     const stations = owner.world.getStations();
-    owner.setTargetStation(stations[Math.floor(Math.random() * stations.length)]);
-    owner.stateMachine.changeTo('SEEKING');
+    if (stations.length > 0) {
+      owner.setTargetStation(owner.pickNextStation(stations));
+      owner.stateMachine.changeTo('SEEKING');
+    }
   }
 }
 
 class SeekingState extends State {
+  enter(owner) {
+    owner.arrive.active = true;
+    owner.seek.active = true;
+  }
+  
   execute(owner) {
-    if (owner.position.distanceTo(owner.target.position) < 60) {
+    if (owner.position.distanceTo(owner.target.position) < 25 && owner.velocity.length() <= 2) {
       owner.stateMachine.changeTo('DOCKING');
     }
   }
@@ -65,10 +87,22 @@ class SeekingState extends State {
 class DockingState extends State {
   enter(owner) {
     owner.steering.deactivateAll();
-    setTimeout(() => {
-      owner.steering.activateAll();
+    owner.velocity.set(0, 0, 0);
+    owner.arrive.active = false;
+    owner.seek.active = false;
+    if (owner.targetStation) {
+      owner.targetStation.reserveDock(owner);
+    }
+    owner.dockStart = performance.now();
+  }
+  
+  execute(owner) {
+    if (performance.now() - owner.dockStart > 3000) {
+      if (owner.targetStation) {
+        owner.targetStation.releaseDock(owner);
+      }
       owner.stateMachine.changeTo('IDLE');
-    }, 2000);
+    }
   }
 }
 

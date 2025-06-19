@@ -1,30 +1,19 @@
-import { GameEntity, StateMachine, State } from 'yuka';
+import { GameEntity } from 'yuka';
+import * as THREE from 'three';
 
 export class BaseStation extends GameEntity {
-  constructor(name, faction = 'neutral') {
+  constructor(name = 'Base Station', position = new THREE.Vector3()) {
     super();
     this.name = name;
-    this.faction = faction;
-    this.stateMachine = new StateMachine(this);
-    this.stateMachine.add('IDLE', new IdleState());
-    this.stateMachine.changeTo('IDLE');
+    this.position.copy(position);
+    this.dockedShips = new Set();
   }
-
-  update(delta) {
-    this.stateMachine.update();
+  
+  reserveDock(ship) {
+    this.dockedShips.add(ship);
   }
-}
-
-class IdleState extends State {
-  enter(owner) {
-    console.log(`[${owner.name}] is now IDLE`);
-  }
-
-  execute(owner) {
-    // Placeholder for idle behavior
-  }
-
-  exit(owner) {
-    console.log(`[${owner.name}] exited IDLE`);
+  
+  releaseDock(ship) {
+    this.dockedShips.delete(ship);
   }
 }
