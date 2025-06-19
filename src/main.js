@@ -48,6 +48,9 @@ async function initializeGame() {
     const stationB = EntityFactory.createFromId('station-basic', new THREE.Vector3(300, 0, 0));
     const trader = EntityFactory.createFromId('cargo-runner');
 
+    // show the trader's mesh
+    scene.add(trader.mesh);
+
     // Add entities to AI manager
     aiManager.add(stationA);
     aiManager.add(stationB);
@@ -68,10 +71,6 @@ async function initializeGame() {
     stationBMesh.position.copy(stationB.position);
     scene.add(stationBMesh);
 
-    // Add the trader's mesh to the scene (mesh is created by EntityFactory)
-    if (trader.mesh) {
-      scene.add(trader.mesh);
-    }
 
     // Extend Game class to integrate Three.js and World updates
     class GalacticGame extends Game {
