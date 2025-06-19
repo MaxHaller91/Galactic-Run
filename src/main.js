@@ -1,6 +1,15 @@
 // Temporary debug guard for StateMachine.add
-import * as THREE from 'three';
 import * as YUKA from 'yuka';
+
+const origAdd = YUKA.StateMachine.prototype.add;
+YUKA.StateMachine.prototype.add = function (name, state) {
+  if (!(state instanceof YUKA.State)) {
+    console.error('[BAD-ADD]', name, state, 'module id =', import.meta.url);
+  }
+  return origAdd.call(this, name, state);
+};
+
+import * as THREE from 'three';
 import { aiManager, updateAI } from './ai/aiManager.js';
 import { Game } from './core/Game.js';
 import world from './core/World.js';
@@ -59,15 +68,10 @@ async function initializeGame() {
     stationBMesh.position.copy(stationB.position);
     scene.add(stationBMesh);
 
-    // Ship as a red box
-    const shipGeometry = new THREE.BoxGeometry(20, 20, 40);
-    const shipMaterial = new THREE.MeshBasicMaterial({ color: 0xff0000 });
-    const shipMesh = new THREE.Mesh(shipGeometry, shipMaterial);
-    shipMesh.position.copy(trader.position);
-    scene.add(shipMesh);
-
-    // Link Yuka entity positions to Three.js meshes
-    trader.mesh = shipMesh; // Store reference for position updates
+    // Add the trader's mesh to the scene (mesh is created by EntityFactory)
+    if (trader.mesh) {
+      scene.add(trader.mesh);
+    }
 
     // Extend Game class to integrate Three.js and World updates
     class GalacticGame extends Game {
@@ -77,15 +81,7 @@ async function initializeGame() {
         // Update Three.js mesh positions based on Yuka entity positions
         if (trader.mesh) {
           trader.mesh.position.copy(trader.position);
-          trader.mesh.quaternion.copy(trader.rotation);
-          // Optional: make ship face movement direction
-          if (trader.velocity.length() > 0.1) {
-            trader.mesh.lookAt(
-              trader.mesh.position.x + trader.velocity.x,
-              trader.mesh.position.y + trader.velocity.y,
-              trader.mesh.position.z + trader.velocity.z
-            );
-          }
+          trader.mesh.quaternion.copy(trader.rotation);  // use Yuka heading
         }
         renderer.render(scene, camera);
       }
