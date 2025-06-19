@@ -30,14 +30,7 @@ export class EntityFactory {
         if (blueprint.stats && blueprint.stats.maxSpeed) entity.maxSpeed = blueprint.stats.maxSpeed;
         if (blueprint.stats && blueprint.stats.mass) entity.mass = blueprint.stats.mass;
         if (blueprint.position) entity.position.copy(blueprint.position);
-        
-        // ----- TEMPORARY VISUAL --------------------------------------------------
-        // create a simple box mesh so the ship is visible
-        const geom = new THREE.BoxGeometry(20, 20, 40);
-        const mat  = new THREE.MeshNormalMaterial();
-        entity.mesh  = new THREE.Mesh(geom, mat);
-        // Note: scene.add() will be handled in main.js since scene isn't accessible here
-        // ------------------------------------------------------------------------
+        // Vehicle creates its own mesh via setRenderComponent
         break;
       case 'TradeStation':
         entity = new TradeStation(blueprint.name, blueprint.position || new THREE.Vector3());

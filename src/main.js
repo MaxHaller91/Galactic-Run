@@ -77,11 +77,7 @@ async function initializeGame() {
       update(deltaTime) {
         // Update the world and its entities
         world.update(deltaTime);
-        // Update Three.js mesh positions based on Yuka entity positions
-        if (trader.mesh) {
-          trader.mesh.position.copy(trader.position);
-          trader.mesh.quaternion.copy(trader.rotation);  // use Yuka heading
-        }
+        // no manual sync needed - Vehicle.setRenderComponent handles it
         renderer.render(scene, camera);
       }
     }
