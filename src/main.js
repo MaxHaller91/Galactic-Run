@@ -1,4 +1,17 @@
-/* global THREE, YUKA */
+// Temporary debug guard for StateMachine.add
+import * as THREE from 'three';
+import * as YUKA from 'yuka';
+import { aiManager, updateAI } from './ai/aiManager.js';
+import { Game } from './core/Game.js';
+import world from './core/World.js';
+import { EntityFactory } from './factory/EntityFactory.js';
+import { loadAll } from './factory/BlueprintLoader.js';
+
+// Make libraries accessible globally if needed
+window.THREE = THREE;
+window.YUKA = YUKA;
+
+
 // Initialize Three.js scene
 const scene = new THREE.Scene();
 const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 1, 10000);
@@ -8,93 +21,90 @@ const renderer = new THREE.WebGLRenderer();
 renderer.setSize(window.innerWidth, window.innerHeight);
 document.body.appendChild(renderer.domElement);
 
-// AI Manager (simplified for global scope)
-const aiManager = {
-  entities: [],
-  add(entity) {
-    this.entities.push(entity);
-  },
-  update(deltaTime) {
-    this.entities.forEach(entity => {
-      if (typeof entity.update === 'function') {
-        entity.update(deltaTime);
+// Define paths for blueprints to load
+const paths = [
+  '/blueprints/station-basic.json',
+  '/blueprints/ship-cargo-runner.json',
+  '/blueprints/ship-pirate-raider.json'
+];
+
+// Function to initialize the game after loading blueprints
+async function initializeGame() {
+  try {
+    // Load all blueprints asynchronously
+    await loadAll(paths);
+
+    // Create entities using EntityFactory with blueprint IDs
+    const stationA = EntityFactory.createFromId('station-basic', new THREE.Vector3(-300, 0, 0));
+    const stationB = EntityFactory.createFromId('station-basic', new THREE.Vector3(300, 0, 0));
+    const trader = EntityFactory.createFromId('cargo-runner');
+
+    // Add entities to AI manager
+    aiManager.add(stationA);
+    aiManager.add(stationB);
+    aiManager.add(trader);
+
+    // Create simple visual representations for entities
+    // Station A as a blue sphere
+    const stationAGeometry = new THREE.SphereGeometry(50, 32, 32);
+    const stationAMaterial = new THREE.MeshBasicMaterial({ color: 0x0000ff });
+    const stationAMesh = new THREE.Mesh(stationAGeometry, stationAMaterial);
+    stationAMesh.position.copy(stationA.position);
+    scene.add(stationAMesh);
+
+    // Station B as a green sphere
+    const stationBGeometry = new THREE.SphereGeometry(50, 32, 32);
+    const stationBMaterial = new THREE.MeshBasicMaterial({ color: 0x00ff00 });
+    const stationBMesh = new THREE.Mesh(stationBGeometry, stationBMaterial);
+    stationBMesh.position.copy(stationB.position);
+    scene.add(stationBMesh);
+
+    // Ship as a red box
+    const shipGeometry = new THREE.BoxGeometry(20, 20, 40);
+    const shipMaterial = new THREE.MeshBasicMaterial({ color: 0xff0000 });
+    const shipMesh = new THREE.Mesh(shipGeometry, shipMaterial);
+    shipMesh.position.copy(trader.position);
+    scene.add(shipMesh);
+
+    // Link Yuka entity positions to Three.js meshes
+    trader.mesh = shipMesh; // Store reference for position updates
+
+    // Extend Game class to integrate Three.js and World updates
+    class GalacticGame extends Game {
+      update(deltaTime) {
+        // Update the world and its entities
+        world.update(deltaTime);
+        // Update Three.js mesh positions based on Yuka entity positions
+        if (trader.mesh) {
+          trader.mesh.position.copy(trader.position);
+          trader.mesh.quaternion.copy(trader.rotation);
+          // Optional: make ship face movement direction
+          if (trader.velocity.length() > 0.1) {
+            trader.mesh.lookAt(
+              trader.mesh.position.x + trader.velocity.x,
+              trader.mesh.position.y + trader.velocity.y,
+              trader.mesh.position.z + trader.velocity.z
+            );
+          }
+        }
+        renderer.render(scene, camera);
       }
-    });
-  }
-};
-
-// TradeStation class
-function TradeStation(name) {
-  this.name = name;
-  this.stateMachine = new YUKA.StateMachine(this);
-  this.stateMachine.add('IDLE', {
-    enter: () => console.log(`[${this.name}] entered IDLE`),
-    execute: () => {},
-    exit: () => {}
-  });
-  this.stateMachine.changeTo('IDLE');
-  
-  this.update = function(delta) {
-    this.stateMachine.update();
-  };
-}
-
-// TradeShip class
-function TradeShip(name) {
-  this.name = name;
-  this.stateMachine = new YUKA.StateMachine(this);
-  this.stateMachine.add('IDLE', {
-    enter: () => console.log(`[${this.name}] entered IDLE`),
-    execute: () => {},
-    exit: () => {}
-  });
-  this.stateMachine.changeTo('IDLE');
-  
-  this.update = function(delta) {
-    this.stateMachine.update();
-  };
-}
-
-// Game class
-function Game() {
-  this.isRunning = false;
-  this.lastTime = 0;
-  
-  this.start = function() {
-    if (!this.isRunning) {
-      this.isRunning = true;
-      this.lastTime = performance.now();
-      this.animate();
-      console.log('Game started');
     }
-  };
-  
-  this.animate = function() {
-    if (!this.isRunning) return;
-    
-    requestAnimationFrame(() => this.animate());
-    
-    const currentTime = performance.now();
-    const deltaTime = (currentTime - this.lastTime) / 1000; // in seconds
-    this.lastTime = currentTime;
-    
-    this.update(deltaTime);
-  };
-  
-  this.update = function(deltaTime) {
-    aiManager.update(deltaTime);
-    renderer.render(scene, camera);
-  };
+
+    // Start the game only after all blueprints are loaded and entities are created
+    const game = new GalacticGame();
+    game.start();
+
+    console.log('World initialized with:', {
+      stations: world.getStations().length,
+      ships: world.getShips().length
+    });
+    console.log(world.entityManager.entities.map(e => e.name));
+  } catch (error) {
+    console.error(error.message);
+    // Do not start the game if blueprint loading fails
+  }
 }
 
-// Create test entities
-const station = new TradeStation("Europa Station");
-const trader = new TradeShip("Cargo Runner 7");
-
-// Add entities to AI manager
-aiManager.add(station);
-aiManager.add(trader);
-
-// Start the game
-const game = new Game();
-game.start();
+// Start the initialization process
+initializeGame();
