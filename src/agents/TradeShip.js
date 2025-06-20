@@ -17,6 +17,7 @@ export class TradeShip extends Vehicle {
 
     this.maxSpeed = 500;
     this.mass     = 1;
+    this.maxForce = 1000; // High force for rapid acceleration/deceleration
 
     /* state machine */
     this.stateMachine = new StateMachine(this);
@@ -73,17 +74,31 @@ class IdleState extends State {
 class SeekingState extends State {
   enter(owner) {
     owner.steering.clear();
-    owner.arrive.active = true;
-    owner.steering.add(owner.arrive);
     if (owner.target) {
       const offset = randomOffset();
       owner.arrive.target.copy(owner.target.position).add(offset);
+      owner.seek.target.copy(owner.target.position).add(offset);
     }
+    // Start with seek behavior for acceleration
+    owner.seek.active = true;
+    owner.steering.add(owner.seek);
   }
   
   execute(owner) {
-    console.log('speed:', owner.velocity.length().toFixed(2));
-    if (owner.position.distanceTo(owner.arrive.target) < 25 && owner.velocity.length() <= 2) {
+    const distToTarget = owner.position.distanceTo(owner.arrive.target);
+    console.log('speed:', owner.velocity.length().toFixed(2), 'distance:', distToTarget.toFixed(2));
+    
+    // Switch from Seek to Arrive when getting close
+    if (distToTarget < 100 && owner.seek.active) {
+      owner.steering.clear();
+      owner.seek.active = false;
+      owner.arrive.active = true;
+      owner.steering.add(owner.arrive);
+      console.log('Switching to ArriveBehavior');
+    }
+    
+    // Dock when very close and slow
+    if (distToTarget < 25 && owner.velocity.length() <= 2) {
       owner.stateMachine.changeTo('DOCKING');
     }
   }
