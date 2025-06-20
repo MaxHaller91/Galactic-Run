@@ -11,13 +11,12 @@ export class TradeShip extends Vehicle {
     /* steering behaviours */
     this.seek   = new SeekBehavior();
     this.arrive = new ArriveBehavior();
-    this.arrive.deceleration = 2;
+    this.arrive.deceleration = 200;
 
     this.steering.add(this.seek);
-    this.steering.add(this.arrive);
 
-    this.maxSpeed = 60;
-    this.mass     = 40;
+    this.maxSpeed = 400;
+    this.mass     = 1;
 
     /* state machine */
     this.stateMachine = new StateMachine(this);
@@ -73,12 +72,18 @@ class IdleState extends State {
 
 class SeekingState extends State {
   enter(owner) {
-    owner.arrive.active = true;
     owner.seek.active = true;
+    owner.steering.add(owner.arrive);
+    owner.arrive.active = true;
+    if (owner.target) {
+      const offset = randomOffset();
+      owner.arrive.target.copy(owner.target.position).add(offset);
+      owner.seek.target.copy(owner.target.position).add(offset);
+    }
   }
   
   execute(owner) {
-    if (owner.position.distanceTo(owner.target.position) < 25 && owner.velocity.length() <= 2) {
+    if (owner.position.distanceTo(owner.arrive.target) < 25 && owner.velocity.length() <= 2) {
       owner.stateMachine.changeTo('DOCKING');
     }
   }
@@ -104,6 +109,16 @@ class DockingState extends State {
       owner.stateMachine.changeTo('IDLE');
     }
   }
+}
+
+/* Helper function for random offset around station */
+function randomOffset() {
+  const radius = 100;
+  return new THREE.Vector3(
+    (Math.random() - 0.5) * radius,
+    0,
+    (Math.random() - 0.5) * radius
+  );
 }
 
 /* export states for behaviourPacks if needed */
