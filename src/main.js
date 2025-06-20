@@ -60,6 +60,16 @@ async function initializeGame() {
     aiManager.add(stationA);
     aiManager.add(stationB);
     aiManager.add(trader);
+    
+    // IMPORTANT: Also add entities to the world
+    world.addEntity(stationA);
+    world.addEntity(stationB);
+    world.addEntity(trader);
+    
+    console.log('=== ENTITIES ADDED TO WORLD ===');
+    console.log('Station A added:', stationA.name);
+    console.log('Station B added:', stationB.name);
+    console.log('Trader added:', trader.name);
 
     // Create simple visual representations for entities
     // Station A as a blue sphere

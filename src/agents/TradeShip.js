@@ -8,6 +8,10 @@ export class TradeShip extends Vehicle {
     this.name  = name;
     this.world = world;
 
+    console.log('=== TRADESHIP CONSTRUCTOR ===');
+    console.log('Creating TradeShip:', name);
+    console.log('World provided:', !!world);
+
     /* steering behaviours */
     this.seek   = new SeekBehavior();
     this.arrive = new ArriveBehavior();
@@ -18,6 +22,11 @@ export class TradeShip extends Vehicle {
     this.maxSpeed = 500;
     this.mass     = 1;
     this.maxForce = 1000; // High force for rapid acceleration/deceleration
+    
+    // Debug bypass test
+    this.bypassMode = false; // Set to true to test manual movement
+
+    console.log('Vehicle properties set - maxSpeed:', this.maxSpeed, 'maxForce:', this.maxForce);
 
     /* state machine */
     this.stateMachine = new StateMachine(this);
@@ -25,6 +34,8 @@ export class TradeShip extends Vehicle {
     this.stateMachine.add('SEEKING', new SeekingState());
     this.stateMachine.add('DOCKING', new DockingState());
     this.stateMachine.changeTo('IDLE');
+    
+    console.log('State machine initialized, current state:', this.stateMachine.currentState?.constructor.name);
 
     /* mesh and render sync */
     const geom = new THREE.BoxGeometry(20, 20, 40);
@@ -35,6 +46,8 @@ export class TradeShip extends Vehicle {
       renderComponent.position.copy(entity.position);
       renderComponent.quaternion.copy(entity.rotation);
     });
+    
+    console.log('TradeShip constructor complete');
   }
 
   setTargetStation(station) {
@@ -63,10 +76,34 @@ export class TradeShip extends Vehicle {
 
 class IdleState extends State {
   enter(owner) {
+    console.log('=== IDLE STATE ENTERED ===');
+    console.log('Owner:', owner.name);
+    console.log('World available:', !!owner.world);
+    
     const stations = owner.world.getStations();
+    console.log('Stations found:', stations.length);
+    
     if (stations.length > 0) {
-      owner.setTargetStation(owner.pickNextStation(stations));
+      const targetStation = owner.pickNextStation(stations);
+      console.log('Target station selected:', targetStation?.name || 'unnamed');
+      owner.setTargetStation(targetStation);
+      console.log('Changing to SEEKING state');
       owner.stateMachine.changeTo('SEEKING');
+    } else {
+      console.log('No stations found, staying in IDLE');
+    }
+  }
+  
+  execute(owner) {
+    // Check periodically if stations are available
+    if (owner.frameCount % 120 === 0) { // every 2 seconds
+      console.log('IDLE state execute - checking for stations...');
+      const stations = owner.world.getStations();
+      if (stations.length > 0) {
+        console.log('Stations now available, transitioning to SEEKING');
+        owner.setTargetStation(owner.pickNextStation(stations));
+        owner.stateMachine.changeTo('SEEKING');
+      }
     }
   }
 }

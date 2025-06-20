@@ -21,6 +21,23 @@ class World {
    * @param {number} deltaTime - Time since last update in seconds.
    */
   update(deltaTime) {
+    // Debug logging every 120 frames (roughly every 2 seconds)
+    if (!this.debugFrameCount) this.debugFrameCount = 0;
+    this.debugFrameCount++;
+    
+    if (this.debugFrameCount % 120 === 0) {
+      console.log('=== WORLD UPDATE DEBUG ===');
+      console.log('Entities in manager:', this.entityManager.entities.length);
+      console.log('Ships:', this.getShips().length);
+      console.log('Stations:', this.getStations().length);
+      
+      // Log ship details
+      const ships = this.getShips();
+      ships.forEach(ship => {
+        console.log(`Ship ${ship.name}: state=${ship.stateMachine?.currentState?.constructor.name}, pos=(${ship.position.x.toFixed(1)}, ${ship.position.z.toFixed(1)})`);
+      });
+    }
+    
     this.entityManager.update(deltaTime);
     this.dispatcher.dispatchDelayedMessages();
   }
