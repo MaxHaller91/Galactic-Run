@@ -20,6 +20,8 @@ import { loadAll } from './factory/BlueprintLoader.js';
 window.THREE = THREE;
 window.YUKA = YUKA;
 
+import { addArriveDebugMarker, updateDebugLine, syncDebugVisuals } from './debug/debugEnhancer.js';
+
 
 // Initialize Three.js scene
 const scene = new THREE.Scene();
@@ -50,6 +52,9 @@ async function initializeGame() {
 
     // show the trader's mesh
     scene.add(trader.mesh);
+    
+    // Add debug marker for trader's arrive target
+    addArriveDebugMarker(trader, scene);
 
     // Add entities to AI manager
     aiManager.add(stationA);
@@ -77,6 +82,9 @@ async function initializeGame() {
       update(deltaTime) {
         // Update the world and its entities
         world.update(deltaTime);
+        // Sync debug visuals for traders
+        syncDebugVisuals([trader]);
+        updateDebugLine(trader, scene); // optional: shows line to target
         // no manual sync needed - Vehicle.setRenderComponent handles it
         renderer.render(scene, camera);
       }
