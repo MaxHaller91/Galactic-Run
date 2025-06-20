@@ -74,6 +74,9 @@ class IdleState extends State {
 class SeekingState extends State {
   enter(owner) {
     owner.steering.clear();
+    owner.lastPosition = owner.position.clone();
+    owner.lastVelocity = owner.velocity.clone();
+    owner.frameCount = 0;
     if (owner.target) {
       const offset = randomOffset();
       owner.arrive.target.copy(owner.target.position).add(offset);
@@ -82,11 +85,46 @@ class SeekingState extends State {
     // Start with seek behavior for acceleration
     owner.seek.active = true;
     owner.steering.add(owner.seek);
+    console.log('=== SEEKING STATE ENTERED ===');
+    console.log('maxSpeed:', owner.maxSpeed, 'maxForce:', owner.maxForce, 'mass:', owner.mass);
+    console.log('steering behaviors count:', owner.steering.behaviors.length);
   }
   
-  execute(owner) {
+  execute(owner, deltaTime) {
+    owner.frameCount++;
     const distToTarget = owner.position.distanceTo(owner.arrive.target);
-    console.log('speed:', owner.velocity.length().toFixed(2), 'distance:', distToTarget.toFixed(2));
+    
+    // Calculate movement since last frame
+    const positionDelta = owner.position.distanceTo(owner.lastPosition);
+    const velocityDelta = owner.velocity.distanceTo(owner.lastVelocity);
+    
+    // Log detailed physics every 60 frames (roughly once per second)
+    if (owner.frameCount % 60 === 0) {
+      console.log('=== PHYSICS DEBUG ===');
+      console.log('deltaTime:', deltaTime?.toFixed(6) || 'undefined');
+      console.log('speed:', owner.velocity.length().toFixed(2), 'distance:', distToTarget.toFixed(2));
+      console.log('position delta:', positionDelta.toFixed(3), 'velocity delta:', velocityDelta.toFixed(3));
+      console.log('position:', owner.position.x.toFixed(1), owner.position.y.toFixed(1), owner.position.z.toFixed(1));
+      console.log('velocity:', owner.velocity.x.toFixed(2), owner.velocity.y.toFixed(2), owner.velocity.z.toFixed(2));
+      
+      // Check steering force
+      if (owner.steering.behaviors.length > 0) {
+        const steeringForce = new THREE.Vector3();
+        for (const behavior of owner.steering.behaviors) {
+          if (behavior.active) {
+            const force = new THREE.Vector3();
+            behavior.calculate(owner, force);
+            console.log(`${behavior.constructor.name} force:`, force.length().toFixed(3));
+            steeringForce.add(force);
+          }
+        }
+        console.log('total steering force:', steeringForce.length().toFixed(3));
+      }
+    }
+    
+    // Store for next frame comparison
+    owner.lastPosition.copy(owner.position);
+    owner.lastVelocity.copy(owner.velocity);
     
     // Switch from Seek to Arrive when getting close
     if (distToTarget < 100 && owner.seek.active) {
@@ -94,7 +132,7 @@ class SeekingState extends State {
       owner.seek.active = false;
       owner.arrive.active = true;
       owner.steering.add(owner.arrive);
-      console.log('Switching to ArriveBehavior');
+      console.log('Switching to ArriveBehavior at distance:', distToTarget.toFixed(2));
     }
     
     // Dock when very close and slow

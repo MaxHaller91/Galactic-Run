@@ -79,7 +79,26 @@ async function initializeGame() {
 
     // Extend Game class to integrate Three.js and World updates
     class GalacticGame extends Game {
+      constructor() {
+        super();
+        this.frameCount = 0;
+        this.deltaTimeSum = 0;
+      }
+      
       update(deltaTime) {
+        this.frameCount++;
+        this.deltaTimeSum += deltaTime;
+        
+        // Log timing info every 60 frames
+        if (this.frameCount % 60 === 0) {
+          const avgDeltaTime = this.deltaTimeSum / 60;
+          const fps = 1 / avgDeltaTime;
+          console.log('=== GAME TIMING ===');
+          console.log('deltaTime:', deltaTime.toFixed(6), 'avg:', avgDeltaTime.toFixed(6));
+          console.log('FPS:', fps.toFixed(1));
+          this.deltaTimeSum = 0;
+        }
+        
         // Update the world and its entities
         world.update(deltaTime);
         // Sync debug visuals for traders
