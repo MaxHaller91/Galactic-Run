@@ -11,12 +11,12 @@ export class TradeShip extends Vehicle {
     /* steering behaviours */
     this.seek   = new SeekBehavior();
     this.arrive = new ArriveBehavior();
-    this.arrive.deceleration = 4;
+    this.arrive.deceleration = 40;
 
     this.steering.add(this.seek);
 
-    this.maxSpeed = 80;
-    this.mass     = 30;
+    this.maxSpeed = 500;
+    this.mass     = 1;
 
     /* state machine */
     this.stateMachine = new StateMachine(this);
@@ -72,17 +72,17 @@ class IdleState extends State {
 
 class SeekingState extends State {
   enter(owner) {
-    owner.seek.active = true;
-    owner.steering.add(owner.arrive);
+    owner.steering.clear();
     owner.arrive.active = true;
+    owner.steering.add(owner.arrive);
     if (owner.target) {
       const offset = randomOffset();
       owner.arrive.target.copy(owner.target.position).add(offset);
-      owner.seek.target.copy(owner.target.position).add(offset);
     }
   }
   
   execute(owner) {
+    console.log('speed:', owner.velocity.length().toFixed(2));
     if (owner.position.distanceTo(owner.arrive.target) < 25 && owner.velocity.length() <= 2) {
       owner.stateMachine.changeTo('DOCKING');
     }
