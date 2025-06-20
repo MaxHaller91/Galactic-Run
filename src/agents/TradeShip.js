@@ -11,12 +11,12 @@ export class TradeShip extends Vehicle {
     /* steering behaviours */
     this.seek   = new SeekBehavior();
     this.arrive = new ArriveBehavior();
-    this.arrive.deceleration = 200;
+    this.arrive.deceleration = 4;
 
     this.steering.add(this.seek);
 
-    this.maxSpeed = 400;
-    this.mass     = 1;
+    this.maxSpeed = 80;
+    this.mass     = 30;
 
     /* state machine */
     this.stateMachine = new StateMachine(this);
@@ -41,7 +41,7 @@ export class TradeShip extends Vehicle {
     this.seek.target.copy(station.position);
     this.arrive.target.copy(station.position);
   }
-  
+
   pickNextStation(stations) {
     if (stations.length === 0) return null;
     let closestStation = stations[0];
@@ -91,7 +91,7 @@ class SeekingState extends State {
 
 class DockingState extends State {
   enter(owner) {
-    owner.steering.deactivateAll();
+    owner.steering.clear();
     owner.velocity.set(0, 0, 0);
     owner.arrive.active = false;
     owner.seek.active = false;
@@ -113,7 +113,7 @@ class DockingState extends State {
 
 /* Helper function for random offset around station */
 function randomOffset() {
-  const radius = 100;
+  const radius = 30;
   return new THREE.Vector3(
     (Math.random() - 0.5) * radius,
     0,
