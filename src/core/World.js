@@ -43,7 +43,17 @@ class World {
       });
     }
     
-    // Confirm stateMachine.update(deltaTime) is being called within Yuka
+    // CRITICAL FIX: Ensure each Vehicle gets its update() called for steering physics
+    for (const entity of this.entityManager.entities) {
+      if (typeof entity.update === 'function') {
+        if (this.debugFrameCount % 120 === 0) {
+          console.log('[WORLD] calling update on', entity.name, 'isVehicle', entity.constructor.name === 'TradeShip');
+        }
+        entity.update(deltaTime);  // MUST reach Vehicle.update() for steering forces
+      }
+    }
+    
+    // Standard Yuka updates
     this.entityManager.update(deltaTime);
     this.dispatcher.dispatchDelayedMessages();
   }

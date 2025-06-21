@@ -60,8 +60,8 @@ export class TradeShip extends Vehicle {
     
     // Log steering force and velocity every 30 frames for real-time feedback
     if (this.debugFrameCount % 30 === 0) {
-      const steeringForce = this.steering ? this.steering.force : null;
-      const forceLength = steeringForce ? steeringForce.length() : 0;
+      // FIXED: Use correct Yuka property for steering force
+      const forceLength = this.steeringForce ? this.steeringForce.length() : 0;
       console.log(`[PHYSICS] ${this.name}: force=${forceLength.toFixed(2)} speed=${this.velocity.length().toFixed(2)} maxSpeed=${this.maxSpeed}`);
       console.log(`[PHYSICS] deltaTime=${deltaTime?.toFixed(6)} position=(${this.position.x.toFixed(1)}, ${this.position.z.toFixed(1)})`);
       
