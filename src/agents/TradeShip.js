@@ -162,25 +162,31 @@ class SeekingState extends State {
     
     // Log detailed physics every 60 frames (roughly once per second)
     if (owner.frameCount % 60 === 0) {
-      console.log('=== PHYSICS DEBUG ===');
+      console.log('=== STEERING DEBUG ===');
       console.log('deltaTime:', deltaTime?.toFixed(6) || 'undefined');
       console.log('speed:', owner.velocity.length().toFixed(2), 'distance:', distToTarget.toFixed(2));
-      console.log('position delta:', positionDelta.toFixed(3), 'velocity delta:', velocityDelta.toFixed(3));
-      console.log('position:', owner.position.x.toFixed(1), owner.position.y.toFixed(1), owner.position.z.toFixed(1));
-      console.log('velocity:', owner.velocity.x.toFixed(2), owner.velocity.y.toFixed(2), owner.velocity.z.toFixed(2));
+      console.log('steering behaviors:', owner.steering.behaviors.length);
       
-      // Check steering force
+      // Check steering force calculation
       if (owner.steering.behaviors.length > 0) {
         const steeringForce = new THREE.Vector3();
         for (const behavior of owner.steering.behaviors) {
           if (behavior.active) {
             const force = new THREE.Vector3();
             behavior.calculate(owner, force);
-            console.log(`${behavior.constructor.name} force:`, force.length().toFixed(3));
+            console.log(`[STEERING] ${behavior.constructor.name} active=${behavior.active} force=${force.length().toFixed(3)} components=(${force.x.toFixed(2)}, ${force.y.toFixed(2)}, ${force.z.toFixed(2)})`);
             steeringForce.add(force);
+          } else {
+            console.log(`[STEERING] ${behavior.constructor.name} INACTIVE`);
           }
         }
-        console.log('total steering force:', steeringForce.length().toFixed(3));
+        console.log('[STEERING] Total steering force:', steeringForce.length().toFixed(3));
+        
+        // Manual force application test
+        if (steeringForce.length() > 0) {
+          console.log('[STEERING] Force calculated but not applied - calling applyForce manually');
+          owner.applyForce(steeringForce);
+        }
       }
     }
     

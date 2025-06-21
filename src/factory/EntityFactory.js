@@ -18,6 +18,9 @@ export class EntityFactory {
    * @returns {Object} The created entity.
    */
   static createFromBlueprint(blueprint) {
+    console.log('[EntityFactory] Creating entity from blueprint:', blueprint.name, 'class:', blueprint.class);
+    console.trace('[EntityFactory] Stack trace for entity creation');
+    
     if (!blueprint || !blueprint.class) {
       throw new Error('Blueprint must have a class property');
     }
@@ -26,6 +29,7 @@ export class EntityFactory {
 
     switch (blueprint.class) {
       case 'TradeShip':
+        console.log('[EntityFactory] Creating TradeShip with stats:', blueprint.stats);
         entity = new TradeShip(blueprint.name, world);
         if (blueprint.stats && blueprint.stats.maxSpeed) entity.maxSpeed = blueprint.stats.maxSpeed;
         if (blueprint.stats && blueprint.stats.mass) entity.mass = blueprint.stats.mass;
@@ -33,6 +37,7 @@ export class EntityFactory {
         // Vehicle creates its own mesh via setRenderComponent
         break;
       case 'TradeStation':
+        console.log('[EntityFactory] Creating TradeStation at position:', blueprint.position);
         entity = new TradeStation(blueprint.name, blueprint.position || new THREE.Vector3());
         if (blueprint.stats && blueprint.stats.maxSpeed) entity.maxSpeed = blueprint.stats.maxSpeed;
         if (blueprint.stats && blueprint.stats.mass) entity.mass = blueprint.stats.mass;
@@ -88,7 +93,9 @@ export class EntityFactory {
     }
 
     // Register the entity with the world
+    console.log('[EntityFactory] Adding entity to world:', entity.name);
     world.addEntity(entity);
+    console.log('[EntityFactory] Entity creation complete for:', entity.name);
     return entity;
   }
 
@@ -99,6 +106,7 @@ export class EntityFactory {
    * @returns {Object} The created entity.
    */
   static createFromId(id, position = null) {
+    console.log('[EntityFactory] createFromId called with ID:', id, 'position:', position);
     const blueprint = getBlueprint(id);
     if (!blueprint) {
       throw new Error(`Blueprint with ID ${id} not found`);

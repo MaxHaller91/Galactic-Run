@@ -61,15 +61,11 @@ async function initializeGame() {
     aiManager.add(stationB);
     aiManager.add(trader);
     
-    // IMPORTANT: Also add entities to the world
-    world.addEntity(stationA);
-    world.addEntity(stationB);
-    world.addEntity(trader);
-    
-    console.log('=== ENTITIES ADDED TO WORLD ===');
-    console.log('Station A added:', stationA.name, 'type:', stationA.constructor.name);
-    console.log('Station B added:', stationB.name, 'type:', stationB.constructor.name);
-    console.log('Trader added:', trader.name, 'type:', trader.constructor.name);
+    // NOTE: Entities are already added to world by EntityFactory
+    console.log('=== ENTITIES CREATED ===');
+    console.log('Station A created:', stationA.name, 'type:', stationA.constructor.name);
+    console.log('Station B created:', stationB.name, 'type:', stationB.constructor.name);
+    console.log('Trader created:', trader.name, 'type:', trader.constructor.name);
     
     // Debug station count issue
     setTimeout(() => {
