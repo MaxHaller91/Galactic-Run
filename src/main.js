@@ -67,9 +67,20 @@ async function initializeGame() {
     world.addEntity(trader);
     
     console.log('=== ENTITIES ADDED TO WORLD ===');
-    console.log('Station A added:', stationA.name);
-    console.log('Station B added:', stationB.name);
-    console.log('Trader added:', trader.name);
+    console.log('Station A added:', stationA.name, 'type:', stationA.constructor.name);
+    console.log('Station B added:', stationB.name, 'type:', stationB.constructor.name);
+    console.log('Trader added:', trader.name, 'type:', trader.constructor.name);
+    
+    // Debug station count issue
+    setTimeout(() => {
+      const stations = world.getStations();
+      const ships = world.getShips();
+      console.log('[DEBUG] Post-creation station count:', stations.length);
+      console.log('[DEBUG] Station names:', stations.map(s => s.name || 'unnamed'));
+      console.log('[DEBUG] Station types:', stations.map(s => s.constructor.name));
+      console.log('[DEBUG] Ship count:', ships.length);
+      console.log('[DEBUG] Ship names:', ships.map(s => s.name || 'unnamed'));
+    }, 100);
 
     // Create simple visual representations for entities
     // Station A as a blue sphere
@@ -125,9 +136,10 @@ async function initializeGame() {
 
     console.log('World initialized with:', {
       stations: world.getStations().length,
-      ships: world.getShips().length
+      ships: world.getShips().length,
+      totalEntities: world.entityManager.entities.length
     });
-    console.log(world.entityManager.entities.map(e => e.name));
+    console.log('[DEBUG] All entity names:', world.entityManager.entities.map(e => `${e.name || 'unnamed'}(${e.constructor.name})`));
   } catch (error) {
     console.error(error.message);
     // Do not start the game if blueprint loading fails

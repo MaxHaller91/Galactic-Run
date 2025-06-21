@@ -27,9 +27,14 @@ class World {
     
     if (this.debugFrameCount % 120 === 0) {
       console.log('=== WORLD UPDATE DEBUG ===');
+      console.log('deltaTime flow:', deltaTime?.toFixed(6) || 'undefined');
       console.log('Entities in manager:', this.entityManager.entities.length);
       console.log('Ships:', this.getShips().length);
       console.log('Stations:', this.getStations().length);
+      
+      // Debug station details to find duplicate issue
+      const stations = this.getStations();
+      console.log('[World] stations=' + stations.length + ' names=[' + stations.map(s => s.name || 'unnamed').join(', ') + ']');
       
       // Log ship details
       const ships = this.getShips();
@@ -38,6 +43,7 @@ class World {
       });
     }
     
+    // Confirm stateMachine.update(deltaTime) is being called within Yuka
     this.entityManager.update(deltaTime);
     this.dispatcher.dispatchDelayedMessages();
   }

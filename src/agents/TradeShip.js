@@ -50,6 +50,31 @@ export class TradeShip extends Vehicle {
     console.log('TradeShip constructor complete');
   }
 
+  update(deltaTime) {
+    // Call parent Vehicle update first
+    super.update(deltaTime);
+    
+    // Debug physics every 60 frames (~1 second)
+    if (!this.debugFrameCount) this.debugFrameCount = 0;
+    this.debugFrameCount++;
+    
+    if (this.debugFrameCount % 60 === 0) {
+      console.log(`[PHYSICS] ${this.name}: force=${this.lastAppliedForce?.toFixed(3) || 'none'} speed=${this.velocity.length().toFixed(2)} target=(${this.arrive.target.x.toFixed(1)}, ${this.arrive.target.y.toFixed(1)}, ${this.arrive.target.z.toFixed(1)})`);
+      console.log(`[PHYSICS] deltaTime=${deltaTime?.toFixed(6)} position=(${this.position.x.toFixed(1)}, ${this.position.z.toFixed(1)})`);
+    }
+  }
+
+  applyForce(force) {
+    // Log applied forces for debugging
+    this.lastAppliedForce = force.length();
+    if (this.debugFrameCount % 60 === 0) {
+      console.log(`[FORCE] Applied force magnitude: ${force.length().toFixed(3)} components: (${force.x.toFixed(3)}, ${force.y.toFixed(3)}, ${force.z.toFixed(3)})`);
+    }
+    
+    // Call parent applyForce
+    super.applyForce(force);
+  }
+
   setTargetStation(station) {
     this.target = station;
     this.seek.target.copy(station.position);
