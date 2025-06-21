@@ -39,9 +39,22 @@ const paths = [
   '/blueprints/ship-pirate-raider.json'
 ];
 
+// Import the minimal test
+import { runMinimalTest } from './debug/MinimalYukaTest.js';
+
 // Function to initialize the game after loading blueprints
 async function initializeGame() {
   try {
+    // Check if we should run minimal test or full game
+    const urlParams = new URLSearchParams(window.location.search);
+    const runTest = urlParams.get('minimalTest') === 'true';
+    
+    if (runTest) {
+      console.log('=== RUNNING MINIMAL YUKA TEST ===');
+      runMinimalTest();
+      return;
+    }
+    
     // Load all blueprints asynchronously
     await loadAll(paths);
 
