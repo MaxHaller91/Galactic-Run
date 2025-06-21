@@ -54,13 +54,23 @@ export class TradeShip extends Vehicle {
     // Call parent Vehicle update first
     super.update(deltaTime);
     
-    // Debug physics every 60 frames (~1 second)
+    // Debug physics every frame to see real-time force application
     if (!this.debugFrameCount) this.debugFrameCount = 0;
     this.debugFrameCount++;
     
-    if (this.debugFrameCount % 60 === 0) {
-      console.log(`[PHYSICS] ${this.name}: force=${this.lastAppliedForce?.toFixed(3) || 'none'} speed=${this.velocity.length().toFixed(2)} target=(${this.arrive.target.x.toFixed(1)}, ${this.arrive.target.y.toFixed(1)}, ${this.arrive.target.z.toFixed(1)})`);
+    // Log steering force and velocity every 30 frames for real-time feedback
+    if (this.debugFrameCount % 30 === 0) {
+      const steeringForce = this.steering ? this.steering.force : null;
+      const forceLength = steeringForce ? steeringForce.length() : 0;
+      console.log(`[PHYSICS] ${this.name}: force=${forceLength.toFixed(2)} speed=${this.velocity.length().toFixed(2)} maxSpeed=${this.maxSpeed}`);
       console.log(`[PHYSICS] deltaTime=${deltaTime?.toFixed(6)} position=(${this.position.x.toFixed(1)}, ${this.position.z.toFixed(1)})`);
+      
+      // Log steering behavior status
+      if (this.steering && this.steering.behaviors.length > 0) {
+        this.steering.behaviors.forEach(behavior => {
+          console.log(`[STEERING] ${behavior.constructor.name}: active=${behavior.active}`);
+        });
+      }
     }
   }
 
