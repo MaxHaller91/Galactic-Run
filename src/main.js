@@ -15,6 +15,8 @@ import { Game } from './core/Game.js';
 import world from './core/World.js';
 import { EntityFactory } from './factory/EntityFactory.js';
 import { loadAll } from './factory/BlueprintLoader.js';
+import { PirateShip } from './agents/PirateShip.js';
+import { PoliceShip } from './agents/PoliceShip.js';
 
 // Make libraries accessible globally if needed
 window.THREE = THREE;
@@ -49,6 +51,66 @@ async function initializeGame() {
     const stationA = EntityFactory.createFromId('station-basic', new THREE.Vector3(-300, 0, 0));
     const stationB = EntityFactory.createFromId('station-basic', new THREE.Vector3(300, 0, 0));
     const trader = EntityFactory.createFromId('cargo-runner');
+
+    // Enable spatial partitioning for performance
+    world.entityManager.spatialIndex = new YUKA.CellSpacePartitioning(4000, 4000, 4000, 10, 1, 10);
+
+    // Create pirates and police
+    const pirates = [];
+    const police = [];
+    
+    // Spawn 3 pirates at safe distances from stations
+    for (let i = 0; i < 3; i++) {
+      let position;
+      let attempts = 0;
+      do {
+        position = new THREE.Vector3(
+          (Math.random() - 0.5) * 2000,
+          0,
+          (Math.random() - 0.5) * 2000
+        );
+        attempts++;
+      } while (attempts < 50 && (
+        position.distanceTo(stationA.position) < 400 ||
+        position.distanceTo(stationB.position) < 400
+      ));
+      
+      const pirate = new PirateShip(`Pirate-${i + 1}`, world);
+      pirate.position.copy(position);
+      // Random orientation
+      pirate.rotation.fromEuler(0, Math.random() * Math.PI * 2, 0);
+      
+      // Compute bounding radius for collision detection
+      pirate.mesh.geometry.computeBoundingSphere();
+      pirate.boundingRadius = pirate.mesh.geometry.boundingSphere.radius;
+      
+      scene.add(pirate.mesh);
+      world.addEntity(pirate);
+      pirates.push(pirate);
+    }
+    
+    // Spawn 2 police ships (1 leader + 1 wingman)
+    const policeLeader = new PoliceShip('Police-Alpha', world);
+    policeLeader.position.set(0, 0, -500);
+    policeLeader.rotation.fromEuler(0, Math.random() * Math.PI * 2, 0);
+    policeLeader.mesh.geometry.computeBoundingSphere();
+    policeLeader.boundingRadius = policeLeader.mesh.geometry.boundingSphere.radius;
+    scene.add(policeLeader.mesh);
+    world.addEntity(policeLeader);
+    police.push(policeLeader);
+    
+    const policeWingman = new PoliceShip('Police-Beta', world, policeLeader);
+    policeWingman.position.set(100, 0, -500);
+    policeWingman.rotation.fromEuler(0, Math.random() * Math.PI * 2, 0);
+    policeWingman.mesh.geometry.computeBoundingSphere();
+    policeWingman.boundingRadius = policeWingman.mesh.geometry.boundingSphere.radius;
+    scene.add(policeWingman.mesh);
+    world.addEntity(policeWingman);
+    police.push(policeWingman);
+
+    // Add bounding radius to trader for collision detection
+    trader.mesh.geometry.computeBoundingSphere();
+    trader.boundingRadius = trader.mesh.geometry.boundingSphere.radius;
 
     // show the trader's mesh
     scene.add(trader.mesh);
@@ -150,6 +212,10 @@ async function initializeGame() {
         
         // Update the world and its entities
         world.update(deltaTime);
+        
+        // Critical: Dispatch messages after entity updates
+        YUKA.MessageDispatcher.instance.dispatchDelayedMessages();
+        
         // Sync debug visuals for traders
         syncDebugVisuals([trader]);
         updateDebugLine(trader, scene); // optional: shows line to target
@@ -170,6 +236,8 @@ async function initializeGame() {
     console.log('World initialized with:', {
       stations: world.getStations().length,
       ships: world.getShips().length,
+      pirates: pirates.length,
+      police: police.length,
       totalEntities: world.entityManager.entities.length
     });
     console.log('[DEBUG] All entity names:', world.entityManager.entities.map(e => `${e.name || 'unnamed'}(${e.constructor.name})`));

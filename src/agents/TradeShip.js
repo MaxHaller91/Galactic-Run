@@ -1,4 +1,4 @@
-import { Vehicle, SeekBehavior, ArriveBehavior, State, StateMachine } from 'yuka';
+import { Vehicle, SeekBehavior, ArriveBehavior, State, StateMachine, MessageDispatcher } from 'yuka';
 import * as THREE from 'three';
 
 export class TradeShip extends Vehicle {
@@ -48,6 +48,11 @@ export class TradeShip extends Vehicle {
     });
     
     console.log('TradeShip constructor complete');
+    
+    // Distress messaging properties
+    this.lastDistressTime = 0;
+    this.distressRange = 600;
+    this.distressCooldown = 3000; // 3 seconds between distress calls
   }
 
   update(deltaTime) {
@@ -56,6 +61,9 @@ export class TradeShip extends Vehicle {
     
     // Update the state machine to process state transitions
     this.stateMachine.update();
+    
+    // Check for threats and send distress if needed
+    this.checkForThreats();
     
     // Debug physics every frame to see real-time force application
     if (!this.debugFrameCount) this.debugFrameCount = 0;
@@ -107,6 +115,63 @@ export class TradeShip extends Vehicle {
       }
     }
     return closestStation;
+  }
+  
+  checkForThreats() {
+    const now = performance.now();
+    
+    // Don't spam distress calls
+    if (now - this.lastDistressTime < this.distressCooldown) {
+      return;
+    }
+    
+    // Get all entities in the world to check for pirates
+    const entities = this.world.entityManager.entities;
+    const pirates = entities.filter(e => e.constructor.name === 'PirateShip');
+    
+    for (const pirate of pirates) {
+      const distance = this.position.distanceTo(pirate.position);
+      
+      // If pirate is within distress range, send help message
+      if (distance < this.distressRange) {
+        this.sendDistressCall(pirate);
+        break; // Only send one distress call per check
+      }
+    }
+  }
+  
+  sendDistressCall(pirate) {
+    const police = this.world.entityManager.entities.filter(e => e.constructor.name === 'PoliceShip');
+    
+    if (police.length > 0) {
+      // Find nearest police to send distress to
+      let nearestPolice = police[0];
+      let minDist = this.position.distanceTo(nearestPolice.position);
+      
+      for (let i = 1; i < police.length; i++) {
+        const dist = this.position.distanceTo(police[i].position);
+        if (dist < minDist) {
+          minDist = dist;
+          nearestPolice = police[i];
+        }
+      }
+      
+      // Send distress message with pirate info
+      const telegram = {
+        sender: this.id,
+        receiver: nearestPolice.id,
+        message: 'DISTRESS',
+        extraInfo: {
+          pirate: pirate,
+          traderPosition: this.position.clone()
+        }
+      };
+      
+      MessageDispatcher.instance.dispatchMessage(telegram);
+      this.lastDistressTime = performance.now();
+      
+      console.log(`[TradeShip] ${this.name} sent distress call about ${pirate.name} to ${nearestPolice.name}`);
+    }
   }
 }
 
