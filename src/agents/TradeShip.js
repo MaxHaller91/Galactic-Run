@@ -19,9 +19,9 @@ export class TradeShip extends Vehicle {
 
     this.steering.add(this.seek);
 
-    this.maxSpeed = 500;
-    this.mass     = 1;
-    this.maxForce = 1000; // High force for rapid acceleration/deceleration
+    this.maxSpeed = 100;
+    this.mass     = 10;
+    this.maxForce = 2000; // Higher force for rapid acceleration/deceleration
     
     // Debug bypass test
     this.bypassMode = false; // Set to true to test manual movement
@@ -200,7 +200,7 @@ class SeekingState extends State {
     owner.lastVelocity.copy(owner.velocity);
     
     // Switch from Seek to Arrive when getting close
-    if (distToTarget < 100 && owner.seek.active) {
+    if (distToTarget < 50 && owner.seek.active) {
       owner.steering.clear();
       owner.seek.active = false;
       owner.arrive.active = true;
