@@ -38,7 +38,7 @@ export class TradeShip extends Vehicle {
     console.log('State machine initialized, current state:', this.stateMachine.currentState?.constructor.name);
 
     /* mesh and render sync */
-    const geom = new THREE.BoxGeometry(20, 20, 40);
+    const geom = new THREE.BoxGeometry(30, 15, 60);
     const mat  = new THREE.MeshNormalMaterial();
     this.mesh = new THREE.Mesh(geom, mat);
 
@@ -60,8 +60,8 @@ export class TradeShip extends Vehicle {
     
     // Log steering force and velocity every 30 frames for real-time feedback
     if (this.debugFrameCount % 30 === 0) {
-      // FIXED: Use correct Yuka property for steering force
-      const forceLength = this.steeringForce ? this.steeringForce.length() : 0;
+      const steeringForce = this.steering ? this.steering.force : null;
+      const forceLength = steeringForce ? steeringForce.length() : 0;
       console.log(`[PHYSICS] ${this.name}: force=${forceLength.toFixed(2)} speed=${this.velocity.length().toFixed(2)} maxSpeed=${this.maxSpeed}`);
       console.log(`[PHYSICS] deltaTime=${deltaTime?.toFixed(6)} position=(${this.position.x.toFixed(1)}, ${this.position.z.toFixed(1)})`);
       
@@ -191,12 +191,7 @@ class SeekingState extends State {
           }
         }
         console.log('[STEERING] Total steering force:', steeringForce.length().toFixed(3));
-        
-        // Manual force application test
-        if (steeringForce.length() > 0) {
-          console.log('[STEERING] Force calculated but not applied - calling applyForce manually');
-          owner.applyForce(steeringForce);
-        }
+        // Removed manual force application to adhere to Yuka steering behaviors
       }
     }
     
