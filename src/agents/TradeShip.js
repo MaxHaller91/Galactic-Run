@@ -15,7 +15,7 @@ export class TradeShip extends Vehicle {
     /* steering behaviours */
     this.seek   = new SeekBehavior();
     this.arrive = new ArriveBehavior();
-    this.arrive.deceleration = 40;
+    this.arrive.deceleration = 3;
 
     this.steering.add(this.seek);
 
@@ -53,6 +53,9 @@ export class TradeShip extends Vehicle {
   update(deltaTime) {
     // Call parent Vehicle update first
     super.update(deltaTime);
+    
+    // Update the state machine to process state transitions
+    this.stateMachine.update();
     
     // Debug physics every frame to see real-time force application
     if (!this.debugFrameCount) this.debugFrameCount = 0;
@@ -200,7 +203,7 @@ class SeekingState extends State {
     owner.lastVelocity.copy(owner.velocity);
     
     // Switch from Seek to Arrive when getting close
-    if (distToTarget < 50 && owner.seek.active) {
+    if (distToTarget < 60 && owner.seek.active) {
       owner.steering.clear();
       owner.seek.active = false;
       owner.arrive.active = true;
@@ -208,8 +211,8 @@ class SeekingState extends State {
       console.log('Switching to ArriveBehavior at distance:', distToTarget.toFixed(2));
     }
     
-    // Dock when very close and slow
-    if (distToTarget < 25 && owner.velocity.length() <= 2) {
+    // Dock when outside station radius, regardless of speed
+    if (distToTarget < 100) {
       owner.stateMachine.changeTo('DOCKING');
     }
   }
@@ -224,6 +227,10 @@ class DockingState extends State {
     if (owner.targetStation) {
       owner.targetStation.reserveDock(owner);
     }
+    // Change ship color to red when docking
+    if (owner.mesh) {
+      owner.mesh.material = new THREE.MeshBasicMaterial({ color: 0xff0000 });
+    }
     owner.dockStart = performance.now();
   }
   
@@ -231,6 +238,10 @@ class DockingState extends State {
     if (performance.now() - owner.dockStart > 3000) {
       if (owner.targetStation) {
         owner.targetStation.releaseDock(owner);
+      }
+      // Reset ship color when leaving docking state
+      if (owner.mesh) {
+        owner.mesh.material = new THREE.MeshNormalMaterial();
       }
       owner.stateMachine.changeTo('IDLE');
     }

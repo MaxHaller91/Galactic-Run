@@ -39,22 +39,9 @@ const paths = [
   '/blueprints/ship-pirate-raider.json'
 ];
 
-// Import the minimal test
-import { runMinimalTest } from './debug/MinimalYukaTest.js';
-
 // Function to initialize the game after loading blueprints
 async function initializeGame() {
   try {
-    // Check if we should run minimal test or full game
-    const urlParams = new URLSearchParams(window.location.search);
-    const runTest = urlParams.get('minimalTest') === 'true';
-    
-    if (runTest) {
-      console.log('=== RUNNING MINIMAL YUKA TEST ===');
-      runMinimalTest();
-      return;
-    }
-    
     // Load all blueprints asynchronously
     await loadAll(paths);
 
@@ -99,6 +86,16 @@ async function initializeGame() {
     stationAMesh.position.copy(stationA.position);
     scene.add(stationAMesh);
 
+    // Add docking range circle for Station A
+    const dockingRangeAGeometry = new THREE.RingGeometry(100, 110, 32);
+    const dockingRangeAMaterial = new THREE.MeshBasicMaterial({ color: 0xffff00, side: THREE.DoubleSide, depthTest: false });
+    const dockingRangeAMesh = new THREE.Mesh(dockingRangeAGeometry, dockingRangeAMaterial);
+    dockingRangeAMesh.position.copy(stationA.position);
+    dockingRangeAMesh.position.y += 5; // Slight elevation to avoid depth conflicts
+    dockingRangeAMesh.rotation.x = -Math.PI / 2; // Lay flat on XZ plane
+    scene.add(dockingRangeAMesh);
+    console.log('Docking range circle added for Station A at position:', dockingRangeAMesh.position);
+
     // Station B as a green sphere
     const stationBGeometry = new THREE.SphereGeometry(50, 32, 32);
     const stationBMaterial = new THREE.MeshBasicMaterial({ color: 0x00ff00 });
@@ -106,8 +103,30 @@ async function initializeGame() {
     stationBMesh.position.copy(stationB.position);
     scene.add(stationBMesh);
 
+    // Add docking range circle for Station B
+    const dockingRangeBGeometry = new THREE.RingGeometry(100, 110, 32);
+    const dockingRangeBMaterial = new THREE.MeshBasicMaterial({ color: 0xffff00, side: THREE.DoubleSide, depthTest: false });
+    const dockingRangeBMesh = new THREE.Mesh(dockingRangeBGeometry, dockingRangeBMaterial);
+    dockingRangeBMesh.position.copy(stationB.position);
+    dockingRangeBMesh.position.y += 5; // Slight elevation to avoid depth conflicts
+    dockingRangeBMesh.rotation.x = -Math.PI / 2; // Lay flat on XZ plane
+    scene.add(dockingRangeBMesh);
+    console.log('Docking range circle added for Station B at position:', dockingRangeBMesh.position);
+
 
     // Extend Game class to integrate Three.js and World updates
+    // Create UI overlay for ship debug info
+    const debugUI = document.createElement('div');
+    debugUI.style.position = 'absolute';
+    debugUI.style.bottom = '10px';
+    debugUI.style.left = '10px';
+    debugUI.style.color = 'white';
+    debugUI.style.fontFamily = 'Arial, sans-serif';
+    debugUI.style.backgroundColor = 'rgba(0, 0, 0, 0.5)';
+    debugUI.style.padding = '10px';
+    debugUI.id = 'shipDebugUI';
+    document.body.appendChild(debugUI);
+
     class GalacticGame extends Game {
       constructor() {
         super();
@@ -134,6 +153,11 @@ async function initializeGame() {
         // Sync debug visuals for traders
         syncDebugVisuals([trader]);
         updateDebugLine(trader, scene); // optional: shows line to target
+        // Update UI with ship info
+        const speed = trader.velocity.length().toFixed(2);
+        const state = trader.stateMachine.currentState ? trader.stateMachine.currentState.constructor.name : 'Unknown';
+        const distanceToTarget = trader.arrive && trader.arrive.target ? trader.position.distanceTo(trader.arrive.target).toFixed(2) : 'N/A';
+        document.getElementById('shipDebugUI').innerText = `Cargo Runner\nSpeed: ${speed}\nState: ${state}\nDistance to Target: ${distanceToTarget}`;
         // no manual sync needed - Vehicle.setRenderComponent handles it
         renderer.render(scene, camera);
       }
