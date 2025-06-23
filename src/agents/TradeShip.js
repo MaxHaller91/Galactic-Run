@@ -1,5 +1,6 @@
 import * as YUKA from 'yuka';
 import * as THREE from 'three';
+import { dispatcher } from '../core/dispatcher.js';
 
 export class TradeShip extends YUKA.Vehicle {
 
@@ -167,7 +168,7 @@ export class TradeShip extends YUKA.Vehicle {
         }
       };
       
-      YUKA.MessageDispatcher.instance.dispatchMessage(telegram);
+      dispatcher.dispatchMessage(telegram);
       this.lastDistressTime = performance.now();
       
       console.log(`[TradeShip] ${this.name} sent distress call about ${pirate.name} to ${nearestPolice.name}`);

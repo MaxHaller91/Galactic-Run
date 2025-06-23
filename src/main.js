@@ -17,6 +17,7 @@ import { EntityFactory } from './factory/EntityFactory.js';
 import { loadAll } from './factory/BlueprintLoader.js';
 import { PirateShip } from './agents/PirateShip.js';
 import { PoliceShip } from './agents/PoliceShip.js';
+import { dispatcher } from './core/dispatcher.js';
 
 // Make libraries accessible globally if needed
 window.THREE = THREE;
@@ -60,7 +61,10 @@ async function initializeGame() {
     const police = [];
     
     // Spawn 3 pirates at safe distances from stations
+    console.log('=== SPAWNING PIRATES ===');
     for (let i = 0; i < 3; i++) {
+      console.log(`Creating pirate ${i + 1}...`);
+      
       let position;
       let attempts = 0;
       do {
@@ -75,7 +79,11 @@ async function initializeGame() {
         position.distanceTo(stationB.position) < 400
       ));
       
+      console.log(`Pirate ${i + 1} position selected: (${position.x.toFixed(1)}, ${position.y.toFixed(1)}, ${position.z.toFixed(1)}) after ${attempts} attempts`);
+      
       const pirate = new PirateShip(`Pirate-${i + 1}`, world);
+      console.log(`Pirate created: ${pirate.name}, mesh exists: ${!!pirate.mesh}`);
+      
       pirate.position.copy(position);
       // Random orientation
       pirate.rotation.fromEuler(0, Math.random() * Math.PI * 2, 0);
@@ -84,10 +92,14 @@ async function initializeGame() {
       pirate.mesh.geometry.computeBoundingSphere();
       pirate.boundingRadius = pirate.mesh.geometry.boundingSphere.radius;
       
+      console.log(`Adding pirate ${pirate.name} to scene and world...`);
       scene.add(pirate.mesh);
       world.addEntity(pirate);
       pirates.push(pirate);
+      
+      console.log(`Pirate ${pirate.name} mesh material color:`, pirate.mesh.material.color.getHex().toString(16));
     }
+    console.log(`=== PIRATES SPAWNED: ${pirates.length} ===`);
     
     // Spawn 2 police ships (1 leader + 1 wingman)
     const policeLeader = new PoliceShip('Police-Alpha', world);
@@ -214,7 +226,7 @@ async function initializeGame() {
         world.update(deltaTime);
         
         // Critical: Dispatch messages after entity updates
-        YUKA.MessageDispatcher.instance?.dispatchDelayedMessages();
+        dispatcher.dispatchDelayedMessages();
         
         // Sync debug visuals for traders
         syncDebugVisuals([trader]);
@@ -229,6 +241,21 @@ async function initializeGame() {
       }
     }
 
+    // Add debug helper function
+    window.dumpEntities = () => {
+      console.log('=== ENTITY DUMP ===');
+      world.entityManager.entities.forEach(e => 
+        console.log(`${e.name || 'unnamed'} (${e.constructor.name}) at (${e.position.x.toFixed(1)}, ${e.position.z.toFixed(1)})`)
+      );
+      console.log(`Total entities: ${world.entityManager.entities.length}`);
+    };
+    
+    // Debug YUKA imports
+    console.log('=== YUKA DEBUG ===');
+    console.log('YUKA.MessageDispatcher:', typeof YUKA.MessageDispatcher);
+    console.log('YUKA.MessageDispatcher.instance:', YUKA.MessageDispatcher.instance);
+    console.log('YUKA.Regulator:', typeof YUKA.Regulator);
+
     // Start the game only after all blueprints are loaded and entities are created
     const game = new GalacticGame();
     game.start();
@@ -241,6 +268,31 @@ async function initializeGame() {
       totalEntities: world.entityManager.entities.length
     });
     console.log('[DEBUG] All entity names:', world.entityManager.entities.map(e => `${e.name || 'unnamed'}(${e.constructor.name})`));
+    
+    // Auto-run debug dump
+    setTimeout(() => {
+      console.log('=== AUTO DEBUG DUMP (after 1 second) ===');
+      window.dumpEntities();
+    }, 1000);
+    
+    // Add camera teleport function for debugging
+    window.tp = (entityName = 'Pirate-1') => {
+      const entity = world.entityManager.entities.find(e => e.name === entityName);
+      if (entity) {
+        camera.position.copy(entity.position.clone().add(new THREE.Vector3(0, 200, 300)));
+        camera.lookAt(entity.position);
+        console.log(`Teleported camera to ${entityName} at position:`, entity.position);
+      } else {
+        console.log(`Entity ${entityName} not found`);
+      }
+    };
+    
+    // Add function to zoom out and see all entities
+    window.zoomOut = () => {
+      camera.position.set(0, 2000, 2000);
+      camera.lookAt(0, 0, 0);
+      console.log('Camera zoomed out to overview position');
+    };
   } catch (error) {
     console.error(error.message);
     // Do not start the game if blueprint loading fails

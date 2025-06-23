@@ -77,7 +77,11 @@ class World {
    * @returns {Array} Array of ship entities.
    */
   getShips() {
-    return this.entityManager.entities.filter(e => e.constructor.name === 'TradeShip');
+    return this.entityManager.entities.filter(e => 
+      e.constructor.name === 'TradeShip' || 
+      e.constructor.name === 'PirateShip' || 
+      e.constructor.name === 'PoliceShip'
+    );
   }
 }
 
