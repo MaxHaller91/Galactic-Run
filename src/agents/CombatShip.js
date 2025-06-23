@@ -1,7 +1,7 @@
-import { Vehicle, Vision, Regulator, MessageDispatcher, StateMachine, Smoother } from 'yuka';
+import * as YUKA from 'yuka';
 import * as THREE from 'three';
 
-export class CombatShip extends Vehicle {
+export class CombatShip extends YUKA.Vehicle {
   constructor(name, world) {
     super();
     this.name  = name;
@@ -9,8 +9,8 @@ export class CombatShip extends Vehicle {
     this.health = 100;
 
     /* perception */
-    this.vision = new Vision(this, 1200, Math.PI);   // 360° in the X-Z plane
-    this.visionReg = new Regulator(4);               // 10 Hz checks
+    this.vision = new YUKA.Vision(this, 1200, Math.PI);   // 360° in the X-Z plane
+    this.visionReg = new YUKA.Regulator(4);               // 10 Hz checks
 
     /* mesh, bounding sphere, smoother */
     const geom = new THREE.ConeGeometry(12, 32, 8);
@@ -24,20 +24,20 @@ export class CombatShip extends Vehicle {
       r.quaternion.copy(e.rotation);
     });
 
-    this.smoother = new Smoother(30);
+    this.smoother = new YUKA.Smoother(30);
 
     /* state machine */
-    this.stateMachine = new StateMachine(this);
+    this.stateMachine = new YUKA.StateMachine(this);
   }
 
   update(dt) {
     super.update(dt);
     this.stateMachine.update();
 
-    if (this.visionReg.update(dt)) this.checkSensors();
-
-    /* allow telegrams created earlier this frame to arrive */
-    MessageDispatcher.instance.dispatchDelayedMessages();
+    // Throttled perception with crash-proof guards
+    if (this.visionReg?.update?.(dt)) {
+      this.checkSensors();
+    }
   }
 
   /* forward messages to state machine */

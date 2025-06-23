@@ -1,7 +1,7 @@
-import { Vehicle, SeekBehavior, ArriveBehavior, State, StateMachine, MessageDispatcher } from 'yuka';
+import * as YUKA from 'yuka';
 import * as THREE from 'three';
 
-export class TradeShip extends Vehicle {
+export class TradeShip extends YUKA.Vehicle {
 
   constructor(name = 'Cargo Runner', world) {
     super();
@@ -13,8 +13,8 @@ export class TradeShip extends Vehicle {
     console.log('World provided:', !!world);
 
     /* steering behaviours */
-    this.seek   = new SeekBehavior();
-    this.arrive = new ArriveBehavior();
+    this.seek   = new YUKA.SeekBehavior();
+    this.arrive = new YUKA.ArriveBehavior();
     this.arrive.deceleration = 3;
 
     this.steering.add(this.seek);
@@ -29,7 +29,7 @@ export class TradeShip extends Vehicle {
     console.log('Vehicle properties set - maxSpeed:', this.maxSpeed, 'maxForce:', this.maxForce);
 
     /* state machine */
-    this.stateMachine = new StateMachine(this);
+    this.stateMachine = new YUKA.StateMachine(this);
     this.stateMachine.add('IDLE',    new IdleState());
     this.stateMachine.add('SEEKING', new SeekingState());
     this.stateMachine.add('DOCKING', new DockingState());
@@ -167,7 +167,7 @@ export class TradeShip extends Vehicle {
         }
       };
       
-      MessageDispatcher.instance.dispatchMessage(telegram);
+      YUKA.MessageDispatcher.instance.dispatchMessage(telegram);
       this.lastDistressTime = performance.now();
       
       console.log(`[TradeShip] ${this.name} sent distress call about ${pirate.name} to ${nearestPolice.name}`);
@@ -177,7 +177,7 @@ export class TradeShip extends Vehicle {
 
 /* ───── States ───────────────────────────────────────────── */
 
-class IdleState extends State {
+class IdleState extends YUKA.State {
   enter(owner) {
     console.log('=== IDLE STATE ENTERED ===');
     console.log('Owner:', owner.name);
@@ -211,7 +211,7 @@ class IdleState extends State {
   }
 }
 
-class SeekingState extends State {
+class SeekingState extends YUKA.State {
   enter(owner) {
     owner.steering.clear();
     owner.lastPosition = owner.position.clone();
@@ -283,7 +283,7 @@ class SeekingState extends State {
   }
 }
 
-class DockingState extends State {
+class DockingState extends YUKA.State {
   enter(owner) {
     owner.steering.clear();
     owner.velocity.set(0, 0, 0);

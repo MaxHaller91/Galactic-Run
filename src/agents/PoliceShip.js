@@ -1,5 +1,5 @@
 import { CombatShip } from './CombatShip.js';
-import { WanderBehavior, PursuitBehavior, ArriveBehavior, OffsetPursuitBehavior, ObstacleAvoidanceBehavior, State } from 'yuka';
+import * as YUKA from 'yuka';
 import * as THREE from 'three';
 
 export class PoliceShip extends CombatShip {
@@ -17,13 +17,13 @@ export class PoliceShip extends CombatShip {
     this.maxChaseTime = 10000; // 10 seconds max chase
     
     // Steering behaviors
-    this.wander = new WanderBehavior();
-    this.pursuit = new PursuitBehavior();
+    this.wander = new YUKA.WanderBehavior();
+    this.pursuit = new YUKA.PursuitBehavior();
     this.pursuit.maxPrediction = this.predictionTime;
-    this.arrive = new ArriveBehavior();
+    this.arrive = new YUKA.ArriveBehavior();
     this.arrive.deceleration = 3;
-    this.offsetPursuit = new OffsetPursuitBehavior();
-    this.obstacleAvoidance = new ObstacleAvoidanceBehavior([]);
+    this.offsetPursuit = new YUKA.OffsetPursuitBehavior();
+    this.obstacleAvoidance = new YUKA.ObstacleAvoidanceBehavior([]);
     
     // Set distinctive police appearance (blue)
     this.mesh.material = new THREE.MeshBasicMaterial({ color: 0x3366ff });
@@ -47,9 +47,16 @@ export class PoliceShip extends CombatShip {
   checkSensors() {
     const visibleEntities = this.vision.getVisibleEntities();
     
+    // Debug logging (can be disabled by setting window.debugSensors = false)
+    if (window.debugSensors !== false && visibleEntities.length > 0) {
+      console.log(`[${this.name}] Vision detected ${visibleEntities.length} entities:`, 
+        visibleEntities.map(e => `${e.constructor.name}(${e.name || 'unnamed'})`));
+    }
+    
     // Look for pirates to chase
     const pirates = visibleEntities.filter(e => e.constructor.name === 'PirateShip');
     if (pirates.length > 0 && this.stateMachine.currentState.constructor.name === 'PolicePatrolState') {
+      console.log(`[${this.name}] Pirate spotted! Switching to CHASE mode targeting ${pirates[0].name}`);
       this.currentTarget = pirates[0]; // Target closest pirate
       this.stateMachine.changeTo('CHASE');
       return;
@@ -58,12 +65,14 @@ export class PoliceShip extends CombatShip {
   
   // Handle distress messages
   onMessage(owner, telegram) {
+    console.log(`[Police] ${this.name} received message:`, telegram.message, 'from sender:', telegram.sender);
+    
     if (telegram.message === 'DISTRESS' && 
         this.stateMachine.currentState.constructor.name === 'PolicePatrolState') {
       if (telegram.extraInfo && telegram.extraInfo.pirate) {
         this.currentTarget = telegram.extraInfo.pirate;
         this.stateMachine.changeTo('CHASE');
-        console.log(`[Police] ${this.name} responding to distress call`);
+        console.log(`[Police] ${this.name} responding to distress call about ${telegram.extraInfo.pirate.name}`);
       }
     }
   }
@@ -87,7 +96,7 @@ export class PoliceShip extends CombatShip {
 }
 
 // PATROL State - Wander or follow formation leader
-class PolicePatrolState extends State {
+class PolicePatrolState extends YUKA.State {
   enter(owner) {
     console.log(`[Police] ${owner.name} → PATROL`);
     owner.flashStateChange();
@@ -131,7 +140,7 @@ class PolicePatrolState extends State {
 }
 
 // CHASE State - Pursue pirates
-class PoliceChaseState extends State {
+class PoliceChaseState extends YUKA.State {
   enter(owner) {
     console.log(`[Police] ${owner.name} → CHASE targeting ${owner.currentTarget?.name || 'unknown'}`);
     owner.flashStateChange();
@@ -185,7 +194,7 @@ class PoliceChaseState extends State {
 }
 
 // RETURN State - Return to nearest station
-class PoliceReturnState extends State {
+class PoliceReturnState extends YUKA.State {
   enter(owner) {
     console.log(`[Police] ${owner.name} → RETURN`);
     owner.flashStateChange();

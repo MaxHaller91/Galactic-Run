@@ -1,5 +1,5 @@
 import { CombatShip } from './CombatShip.js';
-import { WanderBehavior, PursuitBehavior, FleeBehavior, ArriveBehavior, ObstacleAvoidanceBehavior, State } from 'yuka';
+import * as YUKA from 'yuka';
 import * as THREE from 'three';
 
 export class PirateShip extends CombatShip {
@@ -14,12 +14,12 @@ export class PirateShip extends CombatShip {
     this.panicDistance = 800;
     
     // Steering behaviors
-    this.wander = new WanderBehavior();
-    this.pursuit = new PursuitBehavior();
-    this.flee = new FleeBehavior(null, this.panicDistance);
-    this.arrive = new ArriveBehavior();
+    this.wander = new YUKA.WanderBehavior();
+    this.pursuit = new YUKA.PursuitBehavior();
+    this.flee = new YUKA.FleeBehavior(null, this.panicDistance);
+    this.arrive = new YUKA.ArriveBehavior();
     this.arrive.deceleration = 3;
-    this.obstacleAvoidance = new ObstacleAvoidanceBehavior([]);
+    this.obstacleAvoidance = new YUKA.ObstacleAvoidanceBehavior([]);
     
     // Set distinctive pirate appearance (red)
     this.mesh.material = new THREE.MeshBasicMaterial({ color: 0xff3333 });
@@ -46,9 +46,16 @@ export class PirateShip extends CombatShip {
   checkSensors() {
     const visibleEntities = this.vision.getVisibleEntities();
     
+    // Debug logging (can be disabled by setting window.debugSensors = false)
+    if (window.debugSensors !== false && visibleEntities.length > 0) {
+      console.log(`[${this.name}] Vision detected ${visibleEntities.length} entities:`, 
+        visibleEntities.map(e => `${e.constructor.name}(${e.name || 'unnamed'})`));
+    }
+    
     // Look for traders to raid
     const traders = visibleEntities.filter(e => e.constructor.name === 'TradeShip');
     if (traders.length > 0 && this.stateMachine.currentState.constructor.name === 'PiratePatrolState') {
+      console.log(`[${this.name}] Trader spotted! Switching to RAID mode targeting ${traders[0].name}`);
       this.currentTarget = traders[0]; // Target closest trader
       this.stateMachine.changeTo('RAID');
       return;
@@ -94,7 +101,7 @@ export class PirateShip extends CombatShip {
 }
 
 // PATROL State - Wander around looking for targets
-class PiratePatrolState extends State {
+class PiratePatrolState extends YUKA.State {
   enter(owner) {
     console.log(`[Pirate] ${owner.name} → PATROL`);
     owner.flashStateChange();
@@ -117,7 +124,7 @@ class PiratePatrolState extends State {
 }
 
 // RAID State - Pursue traders
-class PirateRaidState extends State {
+class PirateRaidState extends YUKA.State {
   enter(owner) {
     console.log(`[Pirate] ${owner.name} → RAID targeting ${owner.currentTarget?.name || 'unknown'}`);
     owner.flashStateChange();
@@ -149,7 +156,7 @@ class PirateRaidState extends State {
 }
 
 // FLEE State - Escape from threats
-class PirateFleeState extends State {
+class PirateFleeState extends YUKA.State {
   enter(owner) {
     console.log(`[Pirate] ${owner.name} → FLEE (health: ${owner.health})`);
     owner.flashStateChange();
@@ -202,7 +209,7 @@ class PirateFleeState extends State {
 }
 
 // DOCK State - Repair at station
-class PirateDockState extends State {
+class PirateDockState extends YUKA.State {
   enter(owner) {
     console.log(`[Pirate] ${owner.name} → DOCK`);
     owner.flashStateChange();

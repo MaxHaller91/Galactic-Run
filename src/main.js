@@ -214,7 +214,7 @@ async function initializeGame() {
         world.update(deltaTime);
         
         // Critical: Dispatch messages after entity updates
-        YUKA.MessageDispatcher.instance.dispatchDelayedMessages();
+        YUKA.MessageDispatcher.instance?.dispatchDelayedMessages();
         
         // Sync debug visuals for traders
         syncDebugVisuals([trader]);
