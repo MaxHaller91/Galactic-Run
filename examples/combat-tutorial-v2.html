@@ -36,13 +36,13 @@
 </head>
 <body>
     <div id="crosshair"></div>
-            <div id="info">
+    <div id="info">
         Throttle Controls Combat<br>
         Red ship (AI) pursues and fires at Blue ship (Player)<br>
         <small>Right-click: Camera controls</small>
     </div>
     <div id="controls">
-        W/S: Throttle Up/Down | A/D: Steer | Mouse: Aim | Left-Click: Fire | Right-Click: Camera
+        W/S: Throttle Up/Down | A/D: Steer | Mouse: Aim | Left-Click: Fire | Scroll: Zoom
     </div>
     
     <script src="https://cdn.jsdelivr.net/npm/yuka@0.7.8/build/yuka.min.js"></script>
@@ -55,38 +55,50 @@
         const scene = new THREE.Scene();
         const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
         
-        // Initialize camera position based on player ship's starting position
         const renderer = new THREE.WebGLRenderer();
         renderer.setSize(window.innerWidth, window.innerHeight);
         document.body.appendChild(renderer.domElement);
         
-        // Camera controls
+        // Camera controls - SIMPLIFIED: Fixed follow camera with zoom only
         const controls = new OrbitControls(camera, renderer.domElement);
         controls.enableDamping = true;
         controls.dampingFactor = 0.05;
-        controls.minDistance = 5;
-        controls.maxDistance = 30;
+        controls.enableRotate = false;  // Disable rotation
+        controls.enablePan = false;     // Disable panning
+        controls.enableZoom = true;     // Only allow zoom
+        controls.minDistance = 8;       // Closest zoom
+        controls.maxDistance = 25;      // Farthest zoom
         controls.mouseButtons = {
-            LEFT: null, // Disable left-click orbit
-            MIDDLE: THREE.MOUSE.DOLLY,
-            RIGHT: THREE.MOUSE.ROTATE
+            LEFT: null,                 // Disable left-click (for firing)
+            MIDDLE: THREE.MOUSE.DOLLY,  // Mouse wheel zoom
+            RIGHT: null                 // Disable right-click
         };
         
-        // ----- Camera–player follow config -----
-        const followOffset = new THREE.Vector3(0, 15, 0);   // 15 units straight above player
-        const followLerp   = 0.15;                          // smoothing factor (0 – 1)
-
+        // Fixed follow camera config
+        const followOffset = new THREE.Vector3(0, 15, 10);  // Behind and above player
+        const followLerp = 0.08;                           // Smooth following
+        
         function updateFollowCamera() {
-            // Only update camera position if OrbitControls is not being used
-            if (!controls.getPolarAngle() && !controls.getAzimuthalAngle()) {
-                // Desired spot is player position plus offset
-                const desired = playerShip.position.clone().add(followOffset);
-                // Smoothly move the actual camera toward that spot
-                camera.position.lerp(desired, followLerp);
-            }
-
-            // Always look at the player
-            camera.lookAt(playerShip.position);
+            // Calculate desired camera position relative to player
+            const playerPos = playerShip.position.clone();
+            const playerForward = new YUKA.Vector3(0, 0, 1);
+            playerForward.applyRotation(playerShip.rotation);
+            
+            // Position camera behind and above the player
+            const cameraOffset = playerForward.clone().multiplyScalar(-followOffset.z);
+            cameraOffset.y += followOffset.y;
+            
+            const desiredPos = playerPos.clone().add(cameraOffset);
+            
+            // Smoothly move camera to desired position
+            camera.position.lerp(desiredPos, followLerp);
+            
+            // Always look at player with slight forward bias
+            const lookTarget = playerPos.clone().add(playerForward.multiplyScalar(3));
+            camera.lookAt(lookTarget);
+            
+            // Update OrbitControls target to follow player
+            controls.target.copy(playerPos);
         }
         
         // Mouse tracking for aiming
@@ -376,9 +388,10 @@
         playerShip.position.set(-15, 0, 0); // Start farther back
         entityManager.add(playerShip);
         
-        // Set initial camera position based on player ship's position
-        camera.position.set(playerShip.position.x, playerShip.position.y + 15, playerShip.position.z);
+        // Set initial camera position
+        camera.position.set(playerShip.position.x - 10, playerShip.position.y + 15, playerShip.position.z + 10);
         camera.lookAt(playerShip.position);
+        controls.target.copy(playerShip.position);
         
         const enemyShip = new CombatShip(0xff3333, false);
         enemyShip.position.set(20, 0, 0); // Start farther away
@@ -494,11 +507,13 @@
                 Throttle Controls Combat - Endless Battle<br>
                 Player Health: ${Math.round(gameState.playerHealth)} | Enemy Health: ${Math.round(gameState.enemyHealth)}<br>
                 Throttle: ${Math.round(playerShip.throttleLevel * 100)}% | Speed: ${Math.round(playerShip.velocity.length())}<br>
-                <small>Ships respawn when destroyed | Right-click: Camera controls</small>
+                <small>Ships respawn when destroyed | Mouse wheel: Zoom in/out</small>
             `;
             
-            controls.update();
+            // Update camera and controls
             updateFollowCamera();
+            controls.update();
+            
             renderer.render(scene, camera);
         }
         animate();
