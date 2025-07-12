@@ -1,0 +1,507 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Yuka Combat - Throttle Controls</title>
+    <style>
+        body { margin: 0; overflow: hidden; background: #000; cursor: crosshair; }
+        #info { 
+            position: absolute; top: 10px; left: 10px; color: white; 
+            font-family: Arial; background: rgba(0,0,0,0.5); padding: 10px;
+        }
+        #controls {
+            position: absolute; bottom: 10px; left: 10px; color: white;
+            font-family: Arial; background: rgba(0,0,0,0.5); padding: 10px;
+        }
+        #crosshair {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            width: 20px;
+            height: 20px;
+            border: 2px solid rgba(255,255,255,0.7);
+            border-radius: 50%;
+            transform: translate(-50%, -50%);
+            pointer-events: none;
+            z-index: 100;
+        }
+    </style>
+    <script type="importmap">
+    {
+        "imports": {
+            "three": "https://unpkg.com/three@0.160.0/build/three.module.js",
+            "three/addons/": "https://unpkg.com/three@0.160.0/examples/jsm/"
+        }
+    }
+    </script>
+</head>
+<body>
+    <div id="crosshair"></div>
+            <div id="info">
+        Throttle Controls Combat<br>
+        Red ship (AI) pursues and fires at Blue ship (Player)<br>
+        <small>Right-click: Camera controls</small>
+    </div>
+    <div id="controls">
+        W/S: Throttle Up/Down | A/D: Steer | Mouse: Aim | Left-Click: Fire | Right-Click: Camera
+    </div>
+    
+    <script src="https://cdn.jsdelivr.net/npm/yuka@0.7.8/build/yuka.min.js"></script>
+    
+    <script type="module">
+        import * as THREE from 'three';
+        import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+        
+        // Scene setup
+        const scene = new THREE.Scene();
+        const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
+        
+        // Initialize camera position based on player ship's starting position
+        const renderer = new THREE.WebGLRenderer();
+        renderer.setSize(window.innerWidth, window.innerHeight);
+        document.body.appendChild(renderer.domElement);
+        
+        // Camera controls
+        const controls = new OrbitControls(camera, renderer.domElement);
+        controls.enableDamping = true;
+        controls.dampingFactor = 0.05;
+        controls.minDistance = 5;
+        controls.maxDistance = 30;
+        controls.mouseButtons = {
+            LEFT: null, // Disable left-click orbit
+            MIDDLE: THREE.MOUSE.DOLLY,
+            RIGHT: THREE.MOUSE.ROTATE
+        };
+        
+        // ----- Camera–player follow config -----
+        const followOffset = new THREE.Vector3(0, 15, 0);   // 15 units straight above player
+        const followLerp   = 0.15;                          // smoothing factor (0 – 1)
+
+        function updateFollowCamera() {
+            // Only update camera position if OrbitControls is not being used
+            if (!controls.getPolarAngle() && !controls.getAzimuthalAngle()) {
+                // Desired spot is player position plus offset
+                const desired = playerShip.position.clone().add(followOffset);
+                // Smoothly move the actual camera toward that spot
+                camera.position.lerp(desired, followLerp);
+            }
+
+            // Always look at the player
+            camera.lookAt(playerShip.position);
+        }
+        
+        // Mouse tracking for aiming
+        const mouse = new THREE.Vector2();
+        const raycaster = new THREE.Raycaster();
+        let mouseWorldPosition = new THREE.Vector3();
+        let isLeftMouseDown = false;
+        
+        // Ground plane for mouse raycasting
+        const groundPlane = new THREE.Mesh(
+            new THREE.PlaneGeometry(100, 100),
+            new THREE.MeshBasicMaterial({ visible: false })
+        );
+        groundPlane.rotation.x = -Math.PI / 2;
+        scene.add(groundPlane);
+        
+        function onMouseMove(event) {
+            mouse.x = (event.clientX / window.innerWidth) * 2 - 1;
+            mouse.y = -(event.clientY / window.innerHeight) * 2 + 1;
+            
+            raycaster.setFromCamera(mouse, camera);
+            const intersects = raycaster.intersectObject(groundPlane);
+            if (intersects.length > 0) {
+                mouseWorldPosition.copy(intersects[0].point);
+            }
+        }
+        
+        function onMouseDown(event) {
+            if (event.button === 0) {
+                isLeftMouseDown = true;
+                event.preventDefault();
+            }
+        }
+        
+        function onMouseUp(event) {
+            if (event.button === 0) {
+                isLeftMouseDown = false;
+            }
+        }
+        
+        window.addEventListener('mousemove', onMouseMove);
+        window.addEventListener('mousedown', onMouseDown);
+        window.addEventListener('mouseup', onMouseUp);
+        window.addEventListener('contextmenu', e => e.preventDefault());
+        
+        // Yuka setup
+        const entityManager = new YUKA.EntityManager();
+        const time = new YUKA.Time();
+        
+        const projectiles = [];
+        const gameState = {
+            playerHealth: 100,
+            enemyHealth: 100,
+            gameOver: false
+        };
+        
+        // Combat Ship class with tank controls
+        class CombatShip extends YUKA.Vehicle {
+            constructor(color = 0x00ff00, isPlayer = false) {
+                super();
+                this.maxSpeed = isPlayer ? 20 : 3; // Player MUCH faster, pirate slow
+                this.maxForce = isPlayer ? 30 : 5; // Player more agile, pirate sluggish
+                this.health = 100;
+                this.maxHealth = 100;
+                this.isPlayer = isPlayer;
+                this.lastFireTime = 0;
+                this.fireRate = isPlayer ? 150 : 800; // Player fires fast, pirate slow
+                
+                // Throttle control properties for player  
+                if (isPlayer) {
+                    this.throttleLevel = 0; // 0 to 1 (0% to 100% throttle)
+                    this.currentTurn = 0;
+                    this.maxThrust = 30; // Maximum thrust force
+                    this.turnSpeed = 6; // Fast turning
+                    this.throttleRate = 1.5; // How fast throttle changes per second
+                    this.updateOrientation = false; // Prevent Yuka from fighting manual orientation
+                }
+                
+                // Create ship mesh
+                const geometry = new THREE.ConeGeometry(0.3, 1, 8);
+                geometry.rotateX(Math.PI / 2); // Point forward
+                this.mesh = new THREE.Mesh(
+                    geometry, 
+                    new THREE.MeshLambertMaterial({ color: color })
+                );
+                this.mesh.matrixAutoUpdate = false;
+                scene.add(this.mesh);
+                
+                this.createHealthBar();
+                
+                // Sync mesh with Yuka entity
+                this.setRenderComponent(this.mesh, (entity, renderComponent) => {
+                    renderComponent.matrix.copy(entity.worldMatrix);
+                });
+            }
+            
+            createHealthBar() {
+                const bgGeometry = new THREE.PlaneGeometry(1, 0.1);
+                this.healthBarBg = new THREE.Mesh(
+                    bgGeometry,
+                    new THREE.MeshBasicMaterial({ color: 0x444444 })
+                );
+                
+                this.healthBarFill = new THREE.Mesh(
+                    bgGeometry.clone(),
+                    new THREE.MeshBasicMaterial({ color: 0x00ff00 })
+                );
+                
+                scene.add(this.healthBarBg);
+                scene.add(this.healthBarFill);
+            }
+            
+            updateHealthBar() {
+                const healthPercent = this.health / this.maxHealth;
+                
+                const position = this.position.clone();
+                position.y += 1;
+                this.healthBarBg.position.copy(position);
+                this.healthBarFill.position.copy(position);
+                this.healthBarFill.position.z += 0.01;
+                
+                this.healthBarFill.scale.x = healthPercent;
+                
+                if (healthPercent > 0.6) {
+                    this.healthBarFill.material.color.setHex(0x00ff00);
+                } else if (healthPercent > 0.3) {
+                    this.healthBarFill.material.color.setHex(0xffff00);
+                } else {
+                    this.healthBarFill.material.color.setHex(0xff0000);
+                }
+            }
+            
+            takeDamage(amount) {
+                this.health = Math.max(0, this.health - amount);
+                
+                const originalColor = this.mesh.material.color.getHex();
+                this.mesh.material.color.setHex(0xff0000);
+                setTimeout(() => {
+                    this.mesh.material.color.setHex(originalColor);
+                }, 100);
+                
+                // Respawn instead of ending game
+                if (this.health <= 0) {
+                    this.respawn();
+                    return false; // Don't end game
+                }
+                return false;
+            }
+            
+            respawn() {
+                this.health = this.maxHealth;
+                
+                if (this.isPlayer) {
+                    // Respawn player at a safe distance
+                    this.position.set(-15, 0, 0);
+                } else {
+                    // Respawn enemy far away
+                    this.position.set(20, 0, 0);
+                }
+                
+                // Clear velocity
+                this.velocity.set(0, 0, 0);
+                
+                console.log(this.isPlayer ? 'Player respawned!' : 'Enemy respawned!');
+            }
+            
+            fire() {
+                const now = performance.now();
+                if (now - this.lastFireTime < this.fireRate) return false;
+                
+                this.lastFireTime = now;
+                
+                const projectile = new Projectile(
+                    this.position.clone(),
+                    this.forward.clone(),
+                    this.isPlayer ? 0x00ffff : 0xff0000,
+                    this
+                );
+                projectiles.push(projectile);
+                
+                return true;
+            }
+            
+            // Fire at a specific target position (for mouse aiming)
+            fireAtTarget(targetPosition) {
+                const now = performance.now();
+                if (now - this.lastFireTime < this.fireRate) return false;
+                
+                this.lastFireTime = now;
+                
+                // Calculate direction to target
+                const direction = new YUKA.Vector3();
+                direction.subVectors(targetPosition, this.position);
+                direction.normalize();
+                
+                const projectile = new Projectile(
+                    this.position.clone(),
+                    direction,
+                    this.isPlayer ? 0x00ffff : 0xff0000,
+                    this
+                );
+                projectiles.push(projectile);
+                
+                return true;
+            }
+            
+            // Pure throttle (speed) + pure rotation (direction) steering
+            updateThrottleMovement(deltaTime) {
+                if (!this.isPlayer) return;
+                
+                // Clear any AI steering behaviors during manual control
+                this.steering.clear();
+                
+                // FIRST: Handle rotation/steering (A/D changes facing direction ONLY)
+                if (this.currentTurn !== 0) {
+                    // Directly rotate the ship using Yuka's rotation system
+                    const turnAmount = this.currentTurn * this.turnSpeed * deltaTime;
+                    
+                    // Create rotation quaternion around Y-axis
+                    const rotationQuat = new YUKA.Quaternion();
+                    rotationQuat.fromEuler(0, turnAmount, 0);
+                    
+                    // Apply rotation to current rotation
+                    this.rotation.multiply(rotationQuat).normalize();
+                    
+                    // Tell GameEntity the transform changed
+                    this._worldMatrixDirty = true;
+                }
+                
+                // SECOND: Build velocity AFTER rotation is settled
+                if (this.throttleLevel > 0) {
+                    // Calculate target speed based on throttle level
+                    const targetSpeed = this.throttleLevel * this.maxSpeed;
+                    
+                    // Calculate actual forward direction from current rotation
+                    const forwardDirection = new YUKA.Vector3(0, 0, 1);   // +Z is ship nose
+                    forwardDirection.applyRotation(this.rotation); // Apply current rotation
+                    
+                    // Set velocity to exact speed in calculated forward direction
+                    this.velocity.copy(forwardDirection);
+                    this.velocity.multiplyScalar(targetSpeed);
+                } else {
+                    // No throttle = gradually slow down
+                    this.velocity.multiplyScalar(0.95);
+                }
+            }
+        }
+        
+        // Projectile class (unchanged)
+        class Projectile {
+            constructor(position, direction, color, owner) {
+                this.owner = owner;
+                this.speed = 20; // Faster projectiles
+                this.damage = 20;
+                this.lifetime = 3000;
+                this.birthTime = performance.now();
+                
+                const geometry = new THREE.SphereGeometry(0.05, 8, 8);
+                this.mesh = new THREE.Mesh(
+                    geometry,
+                    new THREE.MeshBasicMaterial({ color: color })
+                );
+                this.mesh.position.copy(position);
+                scene.add(this.mesh);
+                
+                this.velocity = direction.multiplyScalar(this.speed);
+            }
+            
+            update(deltaTime) {
+                this.mesh.position.add(this.velocity.clone().multiplyScalar(deltaTime));
+                return (performance.now() - this.birthTime) < this.lifetime;
+            }
+            
+            checkCollision(target) {
+                if (target === this.owner) return false;
+                const distance = this.mesh.position.distanceTo(target.position);
+                return distance < 0.5;
+            }
+            
+            destroy() {
+                scene.remove(this.mesh);
+            }
+        }
+        
+        // Create ships with more distance
+        const playerShip = new CombatShip(0x0066ff, true);
+        playerShip.position.set(-15, 0, 0); // Start farther back
+        entityManager.add(playerShip);
+        
+        // Set initial camera position based on player ship's position
+        camera.position.set(playerShip.position.x, playerShip.position.y + 15, playerShip.position.z);
+        camera.lookAt(playerShip.position);
+        
+        const enemyShip = new CombatShip(0xff3333, false);
+        enemyShip.position.set(20, 0, 0); // Start farther away
+        
+        // Add pursuit behavior to enemy
+        const pursuitBehavior = new YUKA.PursuitBehavior(playerShip);
+        pursuitBehavior.maxPrediction = 1;
+        enemyShip.steering.add(pursuitBehavior);
+        entityManager.add(enemyShip);
+        
+        // Lighting
+        const light = new THREE.DirectionalLight(0xffffff, 1);
+        light.position.set(5, 10, 5);
+        scene.add(light);
+        scene.add(new THREE.AmbientLight(0x404040, 0.4));
+        
+        // Input handling
+        const keys = {};
+        document.addEventListener('keydown', (event) => {
+            keys[event.code] = true;
+        });
+        document.addEventListener('keyup', (event) => {
+            keys[event.code] = false;
+        });
+        
+        function handleInput(deltaTime) {
+            // Reset steering input
+            playerShip.currentTurn = 0;
+            
+            // Throttle controls - W increases, S decreases
+            if (keys['KeyW']) {
+                playerShip.throttleLevel = Math.min(1.0, playerShip.throttleLevel + playerShip.throttleRate * deltaTime);
+            }
+            if (keys['KeyS']) {
+                playerShip.throttleLevel = Math.max(0.0, playerShip.throttleLevel - playerShip.throttleRate * deltaTime);
+            }
+            
+            // Steering controls - A/D turn left/right
+            if (keys['KeyA']) playerShip.currentTurn = -1; // Turn left
+            if (keys['KeyD']) playerShip.currentTurn = 1;  // Turn right
+            
+            // Update throttle-based movement using Yuka
+            playerShip.updateThrottleMovement(deltaTime);
+            
+            // Fire at mouse position when left-clicking
+            if (isLeftMouseDown) {
+                playerShip.fireAtTarget(mouseWorldPosition);
+            }
+            
+            // Alternative fire with spacebar (fires forward)
+            if (keys['Space']) {
+                playerShip.fire();
+            }
+        }
+        
+        function updateProjectiles(deltaTime) {
+            for (let i = projectiles.length - 1; i >= 0; i--) {
+                const projectile = projectiles[i];
+                
+                if (!projectile.update(deltaTime)) {
+                    projectile.destroy();
+                    projectiles.splice(i, 1);
+                    continue;
+                }
+                
+                const targets = [playerShip, enemyShip];
+                for (const target of targets) {
+                    if (projectile.checkCollision(target)) {
+                        const destroyed = target.takeDamage(projectile.damage);
+                        
+                        if (target.isPlayer) {
+                            gameState.playerHealth = target.health;
+                        } else {
+                            gameState.enemyHealth = target.health;
+                        }
+                        
+                        if (destroyed) {
+                            gameState.gameOver = true;
+                            console.log(target.isPlayer ? 'Game Over!' : 'Victory!');
+                        }
+                        
+                        projectile.destroy();
+                        projectiles.splice(i, 1);
+                        break;
+                    }
+                }
+            }
+        }
+        
+        function updateAI() {
+            // Pirate only fires when at medium range (not dive bombing)
+            const distanceToPlayer = enemyShip.position.distanceTo(playerShip.position);
+            if (distanceToPlayer < 10 && distanceToPlayer > 3) { // Fire from safer distance
+                enemyShip.fire();
+            }
+        }
+        
+        // Animation loop
+        function animate() {
+            requestAnimationFrame(animate);
+            
+            const deltaTime = time.update().getDelta();
+            
+            handleInput(deltaTime);
+            entityManager.update(deltaTime);
+            updateProjectiles(deltaTime);
+            updateAI();
+            
+            playerShip.updateHealthBar();
+            enemyShip.updateHealthBar();
+            
+            document.getElementById('info').innerHTML = `
+                Throttle Controls Combat - Endless Battle<br>
+                Player Health: ${Math.round(gameState.playerHealth)} | Enemy Health: ${Math.round(gameState.enemyHealth)}<br>
+                Throttle: ${Math.round(playerShip.throttleLevel * 100)}% | Speed: ${Math.round(playerShip.velocity.length())}<br>
+                <small>Ships respawn when destroyed | Right-click: Camera controls</small>
+            `;
+            
+            controls.update();
+            updateFollowCamera();
+            renderer.render(scene, camera);
+        }
+        animate();
+    </script>
+</body>
+</html>

@@ -1,0 +1,299 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Yuka AI Tutorials - Navigation</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #1e3c72, #2a5298);
+            color: white;
+            min-height: 100vh;
+            padding: 20px;
+        }
+        
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+        }
+        
+        h1 {
+            text-align: center;
+            margin-bottom: 10px;
+            font-size: 2.5em;
+            text-shadow: 2px 2px 4px rgba(0,0,0,0.3);
+        }
+        
+        .subtitle {
+            text-align: center;
+            margin-bottom: 40px;
+            opacity: 0.8;
+            font-size: 1.1em;
+        }
+        
+        .tutorial-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(350px, 1fr));
+            gap: 20px;
+            margin-top: 30px;
+        }
+        
+        .tutorial-card {
+            background: rgba(255, 255, 255, 0.1);
+            border-radius: 12px;
+            padding: 20px;
+            -webkit-backdrop-filter: blur(10px);
+            backdrop-filter: blur(10px);
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            transition: transform 0.3s ease, background-color 0.3s ease;
+        }
+        
+        .tutorial-card:hover {
+            transform: translateY(-5px);
+            background: rgba(255, 255, 255, 0.15);
+        }
+        
+        .tutorial-card.available {
+            cursor: pointer;
+        }
+        
+        .tutorial-card.available:hover {
+            box-shadow: 0 10px 25px rgba(0,0,0,0.3);
+        }
+        
+        .status {
+            display: inline-block;
+            padding: 4px 8px;
+            border-radius: 4px;
+            font-size: 0.8em;
+            font-weight: bold;
+            margin-bottom: 10px;
+        }
+        
+        .status.complete { background: #4CAF50; }
+        .status.progress { background: #FF9800; }
+        .status.planned { background: #757575; }
+        
+        .tutorial-title {
+            font-size: 1.3em;
+            margin-bottom: 10px;
+            color: #fff;
+        }
+        
+        .tutorial-description {
+            opacity: 0.9;
+            line-height: 1.5;
+            margin-bottom: 15px;
+        }
+        
+        .tutorial-features {
+            font-size: 0.9em;
+            opacity: 0.8;
+        }
+        
+        .category {
+            margin: 40px 0 20px 0;
+            padding-bottom: 10px;
+            border-bottom: 2px solid rgba(255,255,255,0.3);
+        }
+        
+        .category h2 {
+            font-size: 1.8em;
+            margin-bottom: 5px;
+        }
+        
+        .category-desc {
+            opacity: 0.8;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🚀 Yuka AI Tutorials</h1>
+        <p class="subtitle">Interactive examples for learning Yuka.js game AI library with Three.js</p>
+        
+        <!-- BASIC STEERING BEHAVIORS -->
+        <div class="category">
+            <h2>🎯 Basic Steering Behaviors</h2>
+            <p class="category-desc">Fundamental movement patterns every AI agent needs</p>
+        </div>
+        
+        <div class="tutorial-grid">
+            <div class="tutorial-card available" onclick="openTutorial('seek-tutorial.html')">
+                <span class="status complete">✅ Complete</span>
+                <h3 class="tutorial-title">Seek Behavior</h3>
+                <p class="tutorial-description">
+                    Basic target following - vehicle moves directly toward a target position.
+                </p>
+                <p class="tutorial-features">• Cone chases sphere • Target moves every 2s • Simple direct movement</p>
+            </div>
+            
+            <div class="tutorial-card available" onclick="openTutorial('arrive-tutorial.html')">
+                <span class="status complete">✅ Complete</span>
+                <h3 class="tutorial-title">Arrive Behavior</h3>
+                <p class="tutorial-description">
+                    Smooth deceleration when approaching target - no overshooting.
+                </p>
+                <p class="tutorial-features">• Deceleration control • Stopping distance • Natural movement</p>
+            </div>
+            
+            <div class="tutorial-card available" onclick="openTutorial('flee-tutorial.html')">
+                <span class="status complete">✅ Complete</span>
+                <h3 class="tutorial-title">Flee Behavior</h3>
+                <p class="tutorial-description">
+                    Escape from threats - move away from danger zones.
+                </p>
+                <p class="tutorial-features">• Click to move threat • Panic distance • Real-time distance display</p>
+            </div>
+            
+            <div class="tutorial-card available" onclick="openTutorial('wander-tutorial.html')">
+                <span class="status complete">✅ Complete</span>
+                <h3 class="tutorial-title">Wander Behavior</h3>
+                <p class="tutorial-description">
+                    Random autonomous movement - realistic wandering patterns.
+                </p>
+                <p class="tutorial-features">• 25 agents with random colors • Toggle single/swarm mode • Varied speeds</p>
+            </div>
+            
+            <div class="tutorial-card" onclick="alert('Coming next!')">
+                <span class="status planned">⏳ Planned</span>
+                <h3 class="tutorial-title">Pursuit Behavior</h3>
+                <p class="tutorial-description">
+                    Intelligent chasing - predict and intercept moving targets.
+                </p>
+                <p class="tutorial-features">• Target prediction • Interception • Smart chasing</p>
+            </div>
+        </div>
+        
+        <!-- INTERACTIVE FEATURES -->
+        <div class="category">
+            <h2>🖱️ Interactive Features</h2>
+            <p class="category-desc">User interaction and dynamic control systems</p>
+        </div>
+        
+        <div class="tutorial-grid">
+            <div class="tutorial-card" onclick="alert('Coming soon!')">
+                <span class="status planned">⏳ Planned</span>
+                <h3 class="tutorial-title">Mouse Click Movement</h3>
+                <p class="tutorial-description">
+                    Click-to-move functionality - spaceship follows mouse clicks.
+                </p>
+                <p class="tutorial-features">• Raycasting • Click detection • Smooth movement to cursor</p>
+            </div>
+        </div>
+        
+        <!-- COMBAT EXAMPLES -->
+        <div class="category">
+            <h2>⚔️ Combat Systems</h2>
+            <p class="category-desc">Combat mechanics and ship battles</p>
+        </div>
+        
+        <div class="tutorial-grid">
+            <div class="tutorial-card available" onclick="openTutorial('combat-tutorial.html')">
+                <span class="status complete">✅ Complete</span>
+                <h3 class="tutorial-title">Basic Combat</h3>
+                <p class="tutorial-description">
+                    Ships with health bars, projectiles, and AI pursuit behavior.
+                </p>
+                <p class="tutorial-features">• WASD movement • Health systems • Auto-fire AI • Collision detection</p>
+            </div>
+            
+            <div class="tutorial-card available" onclick="openTutorial('combat-tutorial-v2.html')">
+                <span class="status complete">✅ Complete</span>
+                <h3 class="tutorial-title">Throttle Combat</h3>
+                <p class="tutorial-description">
+                    Advanced ship controls with throttle, steering, and mouse aiming.
+                </p>
+                <p class="tutorial-features">• Throttle controls • Mouse aiming • Camera following • Respawn system</p>
+            </div>
+        </div>
+        
+        <!-- ADVANCED BEHAVIORS -->
+        <div class="category">
+            <h2>🧠 Advanced AI Systems</h2>
+            <p class="category-desc">Complex behaviors and decision making</p>
+        </div>
+        
+        <div class="tutorial-grid">
+            <div class="tutorial-card" onclick="alert('Coming soon!')">
+                <span class="status planned">⏳ Planned</span>
+                <h3 class="tutorial-title">Finite State Machines</h3>
+                <p class="tutorial-description">
+                    High-level AI decision making - idle, walk, run states with smooth transitions.
+                </p>
+                <p class="tutorial-features">• State transitions • Animation blending • Event handling</p>
+            </div>
+            
+            <div class="tutorial-card" onclick="alert('Coming soon!')">
+                <span class="status planned">⏳ Planned</span>
+                <h3 class="tutorial-title">Flocking Behavior</h3>
+                <p class="tutorial-description">
+                    Group movement - alignment, cohesion, and separation for realistic flocks.
+                </p>
+                <p class="tutorial-features">• 50 agents • Neighborhood detection • Group coordination</p>
+            </div>
+            
+            <div class="tutorial-card" onclick="alert('Coming soon!')">
+                <span class="status planned">⏳ Planned</span>
+                <h3 class="tutorial-title">Obstacle Avoidance</h3>
+                <p class="tutorial-description">
+                    Navigate around barriers - smart pathfinding around obstacles.
+                </p>
+                <p class="tutorial-features">• Collision detection • Path smoothing • Dynamic avoidance</p>
+            </div>
+            
+            <div class="tutorial-card" onclick="alert('Coming soon!')">
+                <span class="status planned">⏳ Planned</span>
+                <h3 class="tutorial-title">Navigation Meshes</h3>
+                <p class="tutorial-description">
+                    Complex pathfinding - navigate through complex environments using nav meshes.
+                </p>
+                <p class="tutorial-features">• Blender integration • Path optimization • Complex maps</p>
+            </div>
+        </div>
+        
+        <!-- INTEGRATION EXAMPLES -->
+        <div class="category">
+            <h2>🎮 Complete Examples</h2>
+            <p class="category-desc">Full featured demonstrations</p>
+        </div>
+        
+        <div class="tutorial-grid">
+            <div class="tutorial-card" onclick="alert('Coming soon!')">
+                <span class="status planned">⏳ Planned</span>
+                <h3 class="tutorial-title">Self-Driving Car</h3>
+                <p class="tutorial-description">
+                    Complete vehicle AI - follows paths, avoids obstacles, realistic movement.
+                </p>
+                <p class="tutorial-features">• 3D car model • Path following • Speed control</p>
+            </div>
+        </div>
+    </div>
+    
+    <script>
+        function openTutorial(filename) {
+            window.open(filename, '_blank');
+        }
+        
+        // Add some interactive effects
+        document.addEventListener('DOMContentLoaded', function() {
+            const cards = document.querySelectorAll('.tutorial-card');
+            cards.forEach(card => {
+                card.addEventListener('mouseenter', function() {
+                    this.style.transform = 'translateY(-5px) scale(1.02)';
+                });
+                card.addEventListener('mouseleave', function() {
+                    this.style.transform = 'translateY(0) scale(1)';
+                });
+            });
+        });
+    </script>
+</body>
+</html>

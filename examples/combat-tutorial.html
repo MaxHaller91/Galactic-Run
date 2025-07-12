@@ -100,7 +100,6 @@
                     renderComponent.matrix.copy(entity.worldMatrix);
                 });
             }
-            
             createHealthBar() {
                 // Health bar background
                 const bgGeometry = new THREE.PlaneGeometry(1, 0.1);
@@ -223,7 +222,7 @@
         
         // Create enemy ship (red)
         const enemyShip = new CombatShip(0xff3333, false);
-        enemyShip.position.set(3, 0, 0);
+        enemyShip.position.set(20, 0, 0);
         
         // Add pursuit behavior to enemy
         const pursuitBehavior = new YUKA.PursuitBehavior(playerShip);
